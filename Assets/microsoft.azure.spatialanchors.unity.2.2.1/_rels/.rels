@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Type="http://schemas.microsoft.com/packaging/2010/07/manifest" Target="/Microsoft.Azure.SpatialAnchors.Unity.nuspec" Id="R4792DD875F04A3C7" />
+  <Relationship Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="/package/services/metadata/core-properties/32a9d7503f7b4d2ba1c29bf3fb5c2967.psmdcp" Id="R05A78E8ECAE606AD" />
+</Relationships>
