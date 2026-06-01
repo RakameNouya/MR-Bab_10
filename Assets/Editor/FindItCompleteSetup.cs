@@ -40,9 +40,18 @@ public static class FindItCompleteSetup
             "Modifies FindIt_Main AND FindIt_Menu.\nContinue?", "Yes", "Cancel"))
             return;
 
+        if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+
+        RunAllSilent();
+
+        EditorUtility.DisplayDialog("Done", "FindIt Complete Setup finished — check Console.", "OK");
+    }
+
+    // Called by FindItAutoRun (no dialogs, no user prompts)
+    public static void RunAllSilent()
+    {
         EnsureTag("Treasure");
 
-        if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
         var scene = EditorSceneManager.OpenScene(MainScenePath, OpenSceneMode.Single);
         var all = AllGOs(scene);
 
@@ -62,8 +71,6 @@ public static class FindItCompleteSetup
         EditorSceneManager.MarkSceneDirty(scene);
         EditorSceneManager.SaveScene(scene);
         Debug.Log("[FindIt] FindIt_Main re-saved.");
-
-        EditorUtility.DisplayDialog("Done", "FindIt Complete Setup finished — check Console.", "OK");
     }
 
     // ── A + G + K : Main Camera ──────────────────────────────────────────
