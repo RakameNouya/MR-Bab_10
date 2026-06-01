@@ -7,7 +7,7 @@ using UnityEditor.SceneManagement;
 [InitializeOnLoad]
 public static class FindItAutoRun
 {
-    const string DoneKey = "FindItCompleteSetup_Done_v8_WS";
+    const string DoneKey = "FindItCompleteSetup_Done_v9_HUDP";
 
     static FindItAutoRun()
     {

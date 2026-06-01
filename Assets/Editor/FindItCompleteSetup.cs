@@ -436,28 +436,36 @@ public static class FindItCompleteSetup
         var mp   = gmGO.AddComponent<MultiplayerManager>();
         gmGO.AddComponent<CanvasWorldCameraSetup>();
 
-        // ─── HUD_Canvas (child of Main Camera) ─────────────────────────
+        // ─── HUD_Canvas (child of Main Camera, right peripheral) ───────
         var hud = CreateWorldCanvas("HUD_Canvas", camGO.transform,
-            new Vector2(700, 200), new Vector3(0, 0, 0.6f));
-        AddImage(hud.transform, "BG", BG_HUD, stretch: true);
+            new Vector2(700, 200), new Vector3(0.22f, 0.08f, 0.6f));
+        AddImage(hud.transform, "BG", BG_HUD,
+            anchor: AnchorTopRight(), anchoredPos: Vector2.zero, size: new Vector2(320, 220));
 
         var timer = AddTMP(hud.transform, "TimerText",
-            AnchorTop(), new Vector2(0, -35), new Vector2(200, 55),
-            "0:00", 52, Color.white, FontStyles.Bold);
+            AnchorTopRight(), new Vector2(-10, -30), new Vector2(180, 50),
+            "0:00", 38, Color.white, FontStyles.Bold, TextAlignmentOptions.MidlineRight);
         var score = AddTMP(hud.transform, "ScoreText",
-            AnchorTop(), new Vector2(0, -95), new Vector2(260, 45),
-            "Harta: 0/5", 32, Color.white);
+            AnchorTopRight(), new Vector2(-10, -80), new Vector2(220, 38),
+            "Harta: 0/5", 26, Color.white, FontStyles.Normal, TextAlignmentOptions.MidlineRight);
         var roomTMP = AddTMP(hud.transform, "RoomText",
-            AnchorTopRight(), new Vector2(-10, -35), new Vector2(280, 35),
-            "", 18, new Color(0.6f, 0.85f, 1f), FontStyles.Normal,
+            AnchorTopRight(), new Vector2(-10, -118), new Vector2(300, 28),
+            "", 14, new Color(0.6f, 0.85f, 1f), FontStyles.Normal,
             TextAlignmentOptions.MidlineRight);
 
-        // ShopTracker bottom-left
+        var hudExit = MakeButton(hud.transform, "ExitBtn",
+            AnchorTopRight(), new Vector2(-10, -155), new Vector2(120, 42),
+            "EXIT", BTN_RED_BRT);
+        WireClick(hudExit, flow, "ExitToMenu");
+        var hudExitLbl = hudExit.GetComponentInChildren<TextMeshProUGUI>();
+        if (hudExitLbl) hudExitLbl.fontSize = 18;
+
+        // ShopTracker — top-right, dots+labels hidden until claimed
         var tracker = NewUI(hud.transform, "ShopTracker",
-            AnchorBottomLeft(), new Vector2(165, 37), new Vector2(320, 55));
+            AnchorTopRight(), new Vector2(-10, -200), new Vector2(300, 80));
         var trackerHLG = tracker.AddComponent<HorizontalLayoutGroup>();
         trackerHLG.spacing = 8;
-        trackerHLG.childAlignment = TextAnchor.MiddleLeft;
+        trackerHLG.childAlignment = TextAnchor.MiddleCenter;
         trackerHLG.childForceExpandHeight = false;
         trackerHLG.childForceExpandWidth = false;
         trackerHLG.childControlHeight = false;
@@ -466,27 +474,20 @@ public static class FindItCompleteSetup
         var statusDots = new Image[5];
         for (int i = 0; i < 5; i++)
         {
-            var slot = NewUI(tracker.transform, "Slot_" + i, AnchorCenter(), Vector2.zero, new Vector2(60, 50));
+            var slot = NewUI(tracker.transform, "Slot_" + i, AnchorCenter(), Vector2.zero, new Vector2(54, 70));
             var vlg = slot.AddComponent<VerticalLayoutGroup>();
-            vlg.spacing = 2; vlg.childAlignment = TextAnchor.UpperCenter;
+            vlg.spacing = 3; vlg.childAlignment = TextAnchor.UpperCenter;
             vlg.childForceExpandHeight = false; vlg.childForceExpandWidth = false;
             vlg.childControlHeight = false; vlg.childControlWidth = false;
 
             var dot = NewUI(slot.transform, "Dot_" + i, AnchorCenter(), Vector2.zero, new Vector2(30, 30));
             var dotImg = dot.AddComponent<Image>();
-            dotImg.color = new Color(0.4f, 0.4f, 0.4f, 1f);
+            dotImg.color = new Color(0f, 0f, 0f, 0f);
             statusDots[i] = dotImg;
 
-            AddTMP(slot.transform, "Label", AnchorCenter(), Vector2.zero, new Vector2(60, 16),
-                Shops[i].shortName, 14, Color.white);
+            var lblTMP = AddTMP(slot.transform, "Label", AnchorCenter(), Vector2.zero, new Vector2(54, 18),
+                Shops[i].shortName, 13, new Color(1f, 1f, 1f, 0f));
         }
-
-        var hudExit = MakeButton(hud.transform, "ExitBtn",
-            AnchorTopRight(), new Vector2(-10, -90), new Vector2(100, 38),
-            "EXIT", BTN_RED_BRT);
-        WireClick(hudExit, flow, "ExitToMenu");
-        var hudExitLbl = hudExit.GetComponentInChildren<TextMeshProUGUI>();
-        if (hudExitLbl) hudExitLbl.fontSize = 18;
 
         // ─── Quiz Anchor + Canvas ──────────────────────────────────────
         var quizAnchor = CreateAnchorWithFollow("Quiz_Anchor",
@@ -703,7 +704,7 @@ public static class FindItCompleteSetup
         follow.DefaultDistance = defaultDist;
         follow.MinDistance = minDist;
         follow.MaxDistance = maxDist;
-        follow.OrientationType = SolverOrientationType.FaceTrackedObject;
+        follow.OrientationType = SolverOrientationType.CameraFacing;
         follow.MoveLerpTime = 0.15f;
         follow.RotateLerpTime = 0.15f;
         return go;

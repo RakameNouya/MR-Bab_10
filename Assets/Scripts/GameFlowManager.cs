@@ -16,7 +16,7 @@ public class GameFlowManager : MonoBehaviourPunCallbacks
 
     [Header("Shop Status Dots (Image components on HUD)")]
     public Image[] shopStatusDots;
-    public Color colorNotVisited = new Color(0.4f, 0.4f, 0.4f, 1f);
+    public Color colorNotVisited = new Color(0f, 0f, 0f, 0f);
     public Color colorInProgress = new Color(1f, 0.85f, 0f, 1f);
     public Color colorClaimed    = new Color(0.2f, 0.85f, 0.2f, 1f);
 
@@ -79,8 +79,22 @@ public class GameFlowManager : MonoBehaviourPunCallbacks
         if (timerText) timerText.text = "0:00";
         if (scoreText) scoreText.text = "Harta: 0/" + totalShops;
         if (shopStatusDots != null)
-            foreach (var img in shopStatusDots)
-                if (img) img.color = colorNotVisited;
+            for (int i = 0; i < shopStatusDots.Length; i++)
+            {
+                var dot = shopStatusDots[i];
+                if (dot == null) continue;
+                dot.color = colorNotVisited;
+                var lbl = FindSiblingLabel(dot);
+                if (lbl) lbl.color = new Color(1f, 1f, 1f, 0f);
+            }
+    }
+
+    TextMeshProUGUI FindSiblingLabel(Image dot)
+    {
+        var parent = dot.transform.parent;
+        if (parent == null) return null;
+        var t = parent.Find("Label");
+        return t != null ? t.GetComponent<TextMeshProUGUI>() : null;
     }
 
     public void StartTimer()
@@ -91,13 +105,22 @@ public class GameFlowManager : MonoBehaviourPunCallbacks
     public void SetShopStatus(int idx, ShopStatus s)
     {
         if (shopStatusDots == null || idx >= shopStatusDots.Length) return;
-        var img = shopStatusDots[idx];
-        if (img == null) return;
+        var dot = shopStatusDots[idx];
+        if (dot == null) return;
+        var lbl = FindSiblingLabel(dot);
         switch (s)
         {
-            case ShopStatus.NotVisited: img.color = colorNotVisited; break;
-            case ShopStatus.InProgress: img.color = colorInProgress; break;
-            case ShopStatus.Claimed:    img.color = colorClaimed;    break;
+            case ShopStatus.NotVisited:
+                dot.color = colorNotVisited;
+                if (lbl) lbl.color = new Color(1f, 1f, 1f, 0f);
+                break;
+            case ShopStatus.InProgress:
+                // Hidden until claimed — no visual change per spec.
+                break;
+            case ShopStatus.Claimed:
+                dot.color = colorClaimed;
+                if (lbl) lbl.color = Color.white;
+                break;
         }
     }
 
