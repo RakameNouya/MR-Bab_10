@@ -5,14 +5,18 @@ EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
   m_Scenes:
-  - enabled: 0
-    path: Assets/SamplesResources/Scenes/0-Main.unity
-    guid: a09cb257d566c489595b16ab37547666
   - enabled: 1
-    path: Assets/MultiUserCapabilities.unity
-    guid: 0ae4ce0a796f77341b09212037d5f145
+    path: Assets/SamplesResources/Scenes/FindIt_Menu.unity
+    guid: 98600373715389b46a25bc7b0b57c1fe
+  - enabled: 1
+    path: Assets/SamplesResources/Scenes/FindIt_Main.unity
+    guid: f481cb8775bc0a14ea5aae34c26cda21
   m_configObjects:
-    com.unity.xr.arfoundation.simulation_settings: {fileID: 11400000, guid: 438234d0ae3d8ac48a0dc4e6c46fa26c,
+    UnityEditor.XR.ARCore.ARCoreSettings: {fileID: 11400000, guid: 079bcc62d58272a45bbc083b550d8612,
       type: 2}
-    com.unity.xr.openxr.settings4: {fileID: 11400000, guid: 77f064ca7e5caf04482e2fec4633d8e1,
+    UnityEditor.XR.ARKit.ARKitSettings: {fileID: 11400000, guid: 19eb82e351f7c074393f8e8598931a5f,
+      type: 2}
+    com.unity.xr.arfoundation.simulation_settings: {fileID: 11400000, guid: 2923f61c201dfac4280ceff94c65f514,
+      type: 2}
+    com.unity.xr.openxr.settings4: {fileID: 11400000, guid: 2a6d6129bebb59344a3f6d2168f8dfcd,
       type: 2}

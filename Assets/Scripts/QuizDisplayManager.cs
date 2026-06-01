@@ -1,6 +1,6 @@
 using UnityEngine;
-using TMPro;
 using UnityEngine.UI;
+using TMPro;
 
 public class QuizDisplayManager : MonoBehaviour
 {
@@ -8,35 +8,34 @@ public class QuizDisplayManager : MonoBehaviour
     [SerializeField] TextMeshProUGUI questionText;
     [SerializeField] Button[] answerButtons;
     [SerializeField] GameObject quizPanel;
-    [SerializeField] GameObject treasureObject;
-    [SerializeField] InventoryManager inventoryManager;
+    [SerializeField] public GameObject treasureObject;
 
     public void DisplayQuiz()
     {
         if (currentItem == null) return;
-        quizPanel.SetActive(true);
-        questionText.text = currentItem.question;
-
+        if (quizPanel) quizPanel.SetActive(true);
+        if (questionText) questionText.text = currentItem.question;
         for (int i = 0; i < answerButtons.Length; i++)
         {
+            int idx = i;
             answerButtons[i].onClick.RemoveAllListeners();
-            answerButtons[i].GetComponentInChildren<TextMeshProUGUI>().text = currentItem.answers[i];
-            int index = i;
-            answerButtons[i].onClick.AddListener(() => OnAnswerSelected(index));
+            var lbl = answerButtons[i].GetComponentInChildren<TextMeshProUGUI>();
+            if (lbl && i < currentItem.answers.Length) lbl.text = currentItem.answers[i];
+            answerButtons[i].onClick.AddListener(() => OnAnswer(idx));
         }
     }
 
-    void OnAnswerSelected(int index)
+    void OnAnswer(int idx)
     {
-        if (index == currentItem.correctAnswerIndex)
+        if (idx == currentItem.correctAnswerIndex)
         {
-            inventoryManager?.AddItem(currentItem);
-            treasureObject?.SetActive(true);
-            quizPanel.SetActive(false);
+            Debug.Log("CORRECT!");
+            if (quizPanel) quizPanel.SetActive(false);
+            if (treasureObject) treasureObject.SetActive(true);
         }
         else
         {
-            Debug.Log("Jawaban Salah, Coba Lagi!");
+            Debug.Log("WRONG! Try again.");
         }
     }
 }

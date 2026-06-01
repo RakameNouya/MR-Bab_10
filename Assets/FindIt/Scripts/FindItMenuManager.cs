@@ -1,6 +1,5 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using UnityEngine.UI;
 using TMPro;
 using System.Collections.Generic;
 
@@ -39,8 +38,9 @@ public class FindItMenuManager : MonoBehaviour
     public void ShowLeaderboard()
     {
         if (leaderboardPanel == null) return;
-        var scores = LeaderboardManager.Instance?.GetTopScores()
-            ?? LeaderboardManager.LoadScores();
+        var scores = LeaderboardManager.Instance != null
+            ? LeaderboardManager.Instance.GetAll()
+            : new List<ScoreEntry>();
         PopulateLeaderboardRows(scores);
         leaderboardPanel.SetActive(true);
     }
@@ -50,12 +50,7 @@ public class FindItMenuManager : MonoBehaviour
         if (leaderboardPanel != null) leaderboardPanel.SetActive(false);
     }
 
-    public void HideLeaderboard()
-    {
-        if (leaderboardPanel != null) leaderboardPanel.SetActive(false);
-    }
-
-    void PopulateLeaderboardRows(List<LeaderboardManager.ScoreEntry> scores)
+    void PopulateLeaderboardRows(List<ScoreEntry> scores)
     {
         if (leaderboardRowContainer == null) return;
         foreach (Transform child in leaderboardRowContainer)
@@ -69,9 +64,9 @@ public class FindItMenuManager : MonoBehaviour
             if (texts.Length >= 4)
             {
                 texts[0].text = (i + 1).ToString();
-                texts[1].text = scores[i].playerName;
-                texts[2].text = scores[i].treasureCount.ToString();
-                texts[3].text = LeaderboardManager.Instance?.FormatTime(scores[i].elapsedTime) ?? "--:--";
+                texts[1].text = scores[i].name;
+                texts[2].text = scores[i].treasures.ToString();
+                texts[3].text = LeaderboardManager.FormatTime(scores[i].time);
             }
         }
     }

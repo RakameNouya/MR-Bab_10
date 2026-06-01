@@ -8,8 +8,8 @@ public class HUDController : MonoBehaviour
 
     public void ExitToMenu()
     {
-        PlayerPrefs.SetFloat("LastTime", CountdownManager.Instance?.GetElapsedTime() ?? 0f);
-        PlayerPrefs.SetInt("LastTreasures", TreasureClick.CountTreasure);
+        PlayerPrefs.SetFloat("LastTime", CountdownManager.Instance != null ? CountdownManager.Instance.GetElapsed() : 0f);
+        PlayerPrefs.SetInt("LastTreasures", CountdownManager.Collected);
         PlayerPrefs.Save();
         SceneManager.LoadScene(0);
     }
@@ -17,8 +17,8 @@ public class HUDController : MonoBehaviour
     public void BackToMenuFromResult()
     {
         string name = PlayerPrefs.GetString("PlayerName", "Pemain");
-        LeaderboardManager.Instance?.SaveScore(name, TreasureClick.CountTreasure,
-            CountdownManager.Instance?.GetElapsedTime() ?? 0f);
+        float time = CountdownManager.Instance != null ? CountdownManager.Instance.GetElapsed() : 0f;
+        LeaderboardManager.Instance?.SaveScore(name, CountdownManager.Collected, time);
         SceneManager.LoadScene(0);
     }
 

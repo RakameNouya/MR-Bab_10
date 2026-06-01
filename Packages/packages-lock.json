@@ -1,5 +1,64 @@
 {
   "dependencies": {
+    "com.immersal.core": {
+      "version": "https://github.com/immersal/imdk-unity.git",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {
+        "com.unity.feature.development": "1.0.1",
+        "com.unity.xr.arcore": "5.2.2",
+        "com.unity.xr.arfoundation": "5.2.2",
+        "com.unity.xr.arkit": "5.2.2",
+        "com.unity.xr.openxr": "1.15.0",
+        "com.unity.textmeshpro": "3.0.9",
+        "com.unity.modules.ui": "1.0.0",
+        "com.unity.2d.sprite": "1.0.0",
+        "com.unity.render-pipelines.universal": "14.0.12",
+        "com.unity.ai.navigation": "1.1.7"
+      },
+      "hash": "5b0f144e2350bd3cfd755f551ae4085d25d3ff94"
+    },
+    "com.ivanmurzak.unity.mcp": {
+      "version": "0.76.3",
+      "depth": 0,
+      "source": "registry",
+      "dependencies": {
+        "com.unity.test-framework": "1.1.33",
+        "com.unity.modules.uielements": "1.0.0",
+        "extensions.unity.playerprefsex": "2.1.5"
+      },
+      "url": "https://package.openupm.com"
+    },
+    "com.ivanmurzak.unity.mcp.animation": {
+      "version": "1.2.6",
+      "depth": 0,
+      "source": "registry",
+      "dependencies": {
+        "com.ivanmurzak.unity.mcp": "0.75.1",
+        "com.unity.modules.animation": "1.0.0"
+      },
+      "url": "https://package.openupm.com"
+    },
+    "com.ivanmurzak.unity.mcp.particlesystem": {
+      "version": "1.2.7",
+      "depth": 0,
+      "source": "registry",
+      "dependencies": {
+        "com.ivanmurzak.unity.mcp": "0.75.3",
+        "com.unity.modules.particlesystem": "1.0.0"
+      },
+      "url": "https://package.openupm.com"
+    },
+    "com.ivanmurzak.unity.mcp.probuilder": {
+      "version": "1.2.7",
+      "depth": 0,
+      "source": "registry",
+      "dependencies": {
+        "com.ivanmurzak.unity.mcp": "0.75.3",
+        "com.unity.probuilder": "5.2.4"
+      },
+      "url": "https://package.openupm.com"
+    },
     "com.microsoft.mixedreality.openxr": {
       "version": "file:MixedReality/com.microsoft.mixedreality.openxr-1.11.2.tgz",
       "depth": 0,
@@ -41,6 +100,25 @@
         "com.unity.modules.tilemap": "1.0.0",
         "com.unity.modules.uielements": "1.0.0"
       }
+    },
+    "com.unity.ai.navigation": {
+      "version": "1.1.7",
+      "depth": 1,
+      "source": "registry",
+      "dependencies": {
+        "com.unity.modules.ai": "1.0.0"
+      },
+      "url": "https://packages.unity.com"
+    },
+    "com.unity.burst": {
+      "version": "1.8.21",
+      "depth": 2,
+      "source": "registry",
+      "dependencies": {
+        "com.unity.mathematics": "1.2.1",
+        "com.unity.modules.jsonserialize": "1.0.0"
+      },
+      "url": "https://packages.unity.com"
     },
     "com.unity.collab-proxy": {
       "version": "2.11.2",
@@ -132,12 +210,70 @@
       "dependencies": {},
       "url": "https://packages.unity.com"
     },
+    "com.unity.probuilder": {
+      "version": "5.2.4",
+      "depth": 1,
+      "source": "registry",
+      "dependencies": {
+        "com.unity.modules.imgui": "1.0.0",
+        "com.unity.modules.physics": "1.0.0",
+        "com.unity.settings-manager": "1.0.3"
+      },
+      "url": "https://packages.unity.com"
+    },
+    "com.unity.render-pipelines.core": {
+      "version": "14.0.12",
+      "depth": 2,
+      "source": "builtin",
+      "dependencies": {
+        "com.unity.ugui": "1.0.0",
+        "com.unity.modules.physics": "1.0.0",
+        "com.unity.modules.terrain": "1.0.0",
+        "com.unity.modules.jsonserialize": "1.0.0"
+      }
+    },
+    "com.unity.render-pipelines.universal": {
+      "version": "14.0.12",
+      "depth": 1,
+      "source": "builtin",
+      "dependencies": {
+        "com.unity.mathematics": "1.2.1",
+        "com.unity.burst": "1.8.9",
+        "com.unity.render-pipelines.core": "14.0.12",
+        "com.unity.shadergraph": "14.0.12",
+        "com.unity.render-pipelines.universal-config": "14.0.9"
+      }
+    },
+    "com.unity.render-pipelines.universal-config": {
+      "version": "14.0.10",
+      "depth": 2,
+      "source": "builtin",
+      "dependencies": {
+        "com.unity.render-pipelines.core": "14.0.10"
+      }
+    },
+    "com.unity.searcher": {
+      "version": "4.9.2",
+      "depth": 3,
+      "source": "registry",
+      "dependencies": {},
+      "url": "https://packages.unity.com"
+    },
     "com.unity.settings-manager": {
       "version": "2.1.0",
       "depth": 2,
       "source": "registry",
       "dependencies": {},
       "url": "https://packages.unity.com"
+    },
+    "com.unity.shadergraph": {
+      "version": "14.0.12",
+      "depth": 2,
+      "source": "builtin",
+      "dependencies": {
+        "com.unity.render-pipelines.core": "14.0.12",
+        "com.unity.searcher": "4.9.2"
+      }
     },
     "com.unity.test-framework": {
       "version": "1.4.6",
@@ -161,8 +297,8 @@
       "url": "https://packages.unity.com"
     },
     "com.unity.textmeshpro": {
-      "version": "3.0.7",
-      "depth": 0,
+      "version": "3.0.9",
+      "depth": 1,
       "source": "registry",
       "dependencies": {
         "com.unity.ugui": "1.0.0"
@@ -200,8 +336,21 @@
       },
       "url": "https://packages.unity.com"
     },
+    "com.unity.xr.arcore": {
+      "version": "5.2.2",
+      "depth": 1,
+      "source": "registry",
+      "dependencies": {
+        "com.unity.xr.core-utils": "2.1.0",
+        "com.unity.xr.management": "4.0.1",
+        "com.unity.xr.arfoundation": "5.2.2",
+        "com.unity.modules.androidjni": "1.0.0",
+        "com.unity.modules.unitywebrequest": "1.0.0"
+      },
+      "url": "https://packages.unity.com"
+    },
     "com.unity.xr.arfoundation": {
-      "version": "5.2.0",
+      "version": "5.2.2",
       "depth": 1,
       "source": "registry",
       "dependencies": {
@@ -215,6 +364,18 @@
         "com.unity.modules.particlesystem": "1.0.0",
         "com.unity.modules.unityanalytics": "1.0.0",
         "com.unity.modules.unitywebrequest": "1.0.0"
+      },
+      "url": "https://packages.unity.com"
+    },
+    "com.unity.xr.arkit": {
+      "version": "5.2.2",
+      "depth": 1,
+      "source": "registry",
+      "dependencies": {
+        "com.unity.xr.core-utils": "2.1.0",
+        "com.unity.xr.management": "4.0.1",
+        "com.unity.xr.arfoundation": "5.2.2",
+        "com.unity.editorcoroutines": "1.0.0"
       },
       "url": "https://packages.unity.com"
     },
@@ -261,6 +422,13 @@
         "com.unity.xr.legacyinputhelpers": "2.1.2"
       },
       "url": "https://packages.unity.com"
+    },
+    "extensions.unity.playerprefsex": {
+      "version": "2.1.5",
+      "depth": 1,
+      "source": "registry",
+      "dependencies": {},
+      "url": "https://package.openupm.com"
     },
     "com.unity.modules.ai": {
       "version": "1.0.0",

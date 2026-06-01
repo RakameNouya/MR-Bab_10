@@ -7,9 +7,26 @@
         "com.microsoft.mixedreality",
         "com.microsoft.spatialaudio"
       ]
+    },
+    {
+      "name": "package.openupm.com",
+      "url": "https://package.openupm.com",
+      "scopes": [
+        "com.ivanmurzak",
+        "extensions.unity",
+        "org.nuget.com.ivanmurzak",
+        "org.nuget.microsoft",
+        "org.nuget.system",
+        "org.nuget.r3"
+      ]
     }
   ],
   "dependencies": {
+    "com.immersal.core": "https://github.com/immersal/imdk-unity.git",
+    "com.ivanmurzak.unity.mcp": "0.76.3",
+    "com.ivanmurzak.unity.mcp.animation": "1.2.6",
+    "com.ivanmurzak.unity.mcp.particlesystem": "1.2.7",
+    "com.ivanmurzak.unity.mcp.probuilder": "1.2.7",
     "com.microsoft.mixedreality.openxr": "file:MixedReality/com.microsoft.mixedreality.openxr-1.11.2.tgz",
     "com.microsoft.spatialaudio.spatializer.unity": "file:MixedReality/com.microsoft.spatialaudio.spatializer.unity-2.0.55.tgz",
     "com.ptc.vuforia.engine": "file:com.ptc.vuforia.engine-11.4.4.tgz",

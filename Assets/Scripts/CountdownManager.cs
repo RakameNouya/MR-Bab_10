@@ -3,71 +3,56 @@ using TMPro;
 
 public class CountdownManager : MonoBehaviour
 {
-    public static CountdownManager Instance;
+    public static CountdownManager Instance { get; private set; }
 
-    [SerializeField] TMP_Text timerText;
-    [SerializeField] GameObject alertPanel;
-    [SerializeField] TMP_Text alertText;
+    [SerializeField] TextMeshProUGUI timerText;
+    [SerializeField] TextMeshProUGUI treasureText;
     [SerializeField] GameObject resultPanel;
+    [SerializeField] TextMeshProUGUI resultText;
 
-    float elapsedTime;
-    bool isRunning;
+    float elapsed = 0f;
+    bool running = false;
+    public static int Collected = 0;
+    const int TOTAL = 5;
 
     void Awake()
     {
+        if (Instance != null) { Destroy(gameObject); return; }
         Instance = this;
-        elapsedTime = 0f;
-        isRunning = false;
-    }
-
-    void Start()
-    {
-        UpdateDisplay();
+        Collected = 0;
     }
 
     void Update()
     {
-        if (!isRunning) return;
-        elapsedTime += Time.deltaTime;
-        UpdateDisplay();
+        if (!running) return;
+        elapsed += Time.deltaTime;
+        int m = Mathf.FloorToInt(elapsed / 60f);
+        int s = Mathf.FloorToInt(elapsed % 60f);
+        if (timerText) timerText.text = string.Format("{0}:{1:00}", m, s);
     }
 
-    void UpdateDisplay()
+    public void StartTimer() { if (!running) running = true; }
+
+    public void OnTreasureCollected()
     {
-        if (timerText == null) return;
-        int minutes = Mathf.FloorToInt(elapsedTime / 60f);
-        int seconds = Mathf.FloorToInt(elapsedTime % 60f);
-        timerText.text = string.Format("{0}:{1:00}", minutes, seconds);
+        Collected++;
+        if (treasureText) treasureText.text = "Treasures: " + Collected + "/" + TOTAL;
+        if (Collected >= TOTAL) MissionComplete();
     }
 
-    public void StartTimer()
+    void MissionComplete()
     {
-        if (isRunning) return;
-        isRunning = true;
+        running = false;
+        int m = Mathf.FloorToInt(elapsed / 60f);
+        int s = Mathf.FloorToInt(elapsed % 60f);
+        string t = string.Format("{0}:{1:00}", m, s);
+        PlayerPrefs.SetFloat("LastTime", elapsed);
+        PlayerPrefs.SetInt("LastTreasures", Collected);
+        PlayerPrefs.SetString("LastPlayerName", PlayerPrefs.GetString("PlayerName", "Pemain"));
+        PlayerPrefs.Save();
+        if (resultPanel) resultPanel.SetActive(true);
+        if (resultText) resultText.text = "MISSION COMPLETE!\nTreasures: " + TOTAL + "/" + TOTAL + "\nTime: " + t;
     }
 
-    public void CheckAllCollected(int count)
-    {
-        if (count >= 5) GameOver();
-    }
-
-    void GameOver()
-    {
-        isRunning = false;
-        if (resultPanel != null)
-        {
-            resultPanel.SetActive(true);
-            var resultText = resultPanel.GetComponentInChildren<TMP_Text>();
-            if (resultText != null)
-            {
-                int minutes = Mathf.FloorToInt(elapsedTime / 60f);
-                int seconds = Mathf.FloorToInt(elapsedTime % 60f);
-                resultText.text = $"MISSION COMPLETE!\nTreasures: 5/5\nTime: {minutes}:{seconds:00}";
-            }
-        }
-        string playerName = PlayerPrefs.GetString("PlayerName", "Pemain");
-        LeaderboardManager.Instance?.SaveScore(playerName, 5, elapsedTime);
-    }
-
-    public float GetElapsedTime() => elapsedTime;
+    public float GetElapsed() { return elapsed; }
 }

@@ -141,6 +141,3 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1d098f3825915024c8afca603ad1a9b2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  CollectibleEffect: {fileID: 0}
-  CountTreasureText: {fileID: 0}
-  CountdownTime: {fileID: 0}

@@ -7,7 +7,7 @@ public class LeaderboardDisplay : MonoBehaviour
 
     void OnEnable()
     {
-        var scores = LeaderboardManager.Instance?.GetTopScores();
+        var scores = LeaderboardManager.Instance?.GetAll();
         if (scores == null || rowContainer == null) return;
         int i = 0;
         foreach (Transform row in rowContainer)
@@ -19,9 +19,9 @@ public class LeaderboardDisplay : MonoBehaviour
                 if (texts.Length >= 4)
                 {
                     texts[0].text = (i + 1).ToString();
-                    texts[1].text = scores[i].playerName;
-                    texts[2].text = scores[i].treasureCount.ToString();
-                    texts[3].text = LeaderboardManager.Instance?.FormatTime(scores[i].elapsedTime) ?? "--:--";
+                    texts[1].text = scores[i].name;
+                    texts[2].text = scores[i].treasures.ToString();
+                    texts[3].text = LeaderboardManager.FormatTime(scores[i].time);
                 }
             }
             i++;

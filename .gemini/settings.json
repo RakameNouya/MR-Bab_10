@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "ai-game-developer": {
+      "command": "npx",
+      "args": [
+        "--yes",
+        "@luutuankiet/gemini-mcp",
+        "https://ai-game.dev/mcp"
+      ]
+    }
+  }
+}

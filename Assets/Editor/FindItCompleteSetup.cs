@@ -1,3 +1,7 @@
+// Full rebuild of FindIt_Main per Bab10 spec.
+// Idempotent: nukes MallEnvironment_Proper and HUDCanvas children before rebuilding,
+// preserves checkpoint GameObjects (so quiz wiring stays stable across re-runs).
+
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -6,688 +10,623 @@ using UnityEditor.SceneManagement;
 using UnityEngine.UI;
 using TMPro;
 
-/// <summary>
-/// Run via menu: FindIt ▶ Complete FindIt Setup
-/// Applies ALL scene fixes described in the Bab10 spec.
-/// </summary>
 public static class FindItCompleteSetup
 {
     const string MainScenePath = "Assets/SamplesResources/Scenes/FindIt_Main.unity";
-    const string MenuScenePath = "Assets/SamplesResources/Scenes/FindIt_Menu.unity";
+    const string ItemDir       = "Assets/FindIt/Assets/TreasureItems";
 
-    static readonly (string zone, string treasure, Color color)[] TreasureData =
+    // Shop layout: (Z, name, brand color)
+    static readonly (float z, string name, Color brand)[] Shops =
     {
-        ("CheckpointZone_NewEra",     "Treasure_NewEra",     new Color(0.10f, 0.20f, 0.60f)),
-        ("CheckpointZone_Puma",       "Treasure_Puma",       new Color(0.70f, 0.10f, 0.10f)),
-        ("CheckpointZone_NewBalance", "Treasure_NewBalance", new Color(0.40f, 0.40f, 0.40f)),
-        ("CheckpointZone_Hoops",      "Treasure_Hoops",      new Color(0.90f, 0.50f, 0.00f)),
-        ("CheckpointZone_Vans",       "Treasure_Vans",       new Color(0.05f, 0.05f, 0.05f)),
+        ( 5f, "New Era",     new Color(0.15f, 0.25f, 0.75f)),
+        (10f, "Puma",        new Color(0.75f, 0.10f, 0.10f)),
+        (15f, "New Balance", new Color(0.45f, 0.45f, 0.45f)),
+        (20f, "Hoops",       new Color(0.95f, 0.50f, 0.05f)),
+        (25f, "Vans",        new Color(0.15f, 0.15f, 0.15f)),
     };
 
-    static readonly (float z, string name, Color brand)[] ShopData =
+    // Treasure spec: zone GO name → (treasure GO name, color shown)
+    static readonly (string zone, string tName, string itemKey, Color color)[] Treasures =
     {
-        ( 5f, "New Era",     new Color(0.10f, 0.20f, 0.60f)),
-        (10f, "Puma",        new Color(0.70f, 0.10f, 0.10f)),
-        (15f, "New Balance", new Color(0.40f, 0.40f, 0.40f)),
-        (20f, "Hoops",       new Color(0.90f, 0.50f, 0.00f)),
-        (25f, "Vans",        new Color(0.05f, 0.05f, 0.05f)),
+        ("CheckpointZone_NewEra",     "Treasure_NewEra",     "NewEra_Item",     new Color(0.10f, 0.20f, 0.80f)),
+        ("CheckpointZone_Puma",       "Treasure_Puma",       "Puma_Item",       new Color(0.80f, 0.10f, 0.10f)),
+        ("CheckpointZone_NewBalance", "Treasure_NewBalance", "NewBalance_Item", new Color(0.50f, 0.50f, 0.50f)),
+        ("CheckpointZone_Hoops",      "Treasure_Hoops",      "Hoops_Item",      new Color(1.00f, 0.50f, 0.00f)),
+        ("CheckpointZone_Vans",       "Treasure_Vans",       "Vans_Item",       new Color(0.90f, 0.90f, 0.90f)),
+    };
+
+    static readonly (string file, string name, string q, string[] a, int ci)[] ItemData =
+    {
+        ("NewEra_Item",     "New Era",     "New Era berasal dari negara mana?",            new[]{"USA","UK","Japan"},                 0),
+        ("Puma_Item",       "Puma",        "Tahun berapa Puma didirikan?",                  new[]{"1948","1960","1975"},               0),
+        ("NewBalance_Item", "New Balance", "New Balance terkenal dengan produk apa?",       new[]{"Sepatu Lari","Tas","Topi"},         0),
+        ("Hoops_Item",      "Hoops",       "Olahraga apa yang identik dengan Hoops?",       new[]{"Basket","Sepak Bola","Tenis"},      0),
+        ("Vans_Item",       "Vans",        "Vans terkenal dengan jenis sepatu apa?",        new[]{"Skateboard","Running","Formal"},    0),
     };
 
     [MenuItem("FindIt/Complete FindIt Setup (Full)")]
     public static void RunAll()
     {
         if (!EditorUtility.DisplayDialog("Complete FindIt Setup",
-            "Modifies FindIt_Main AND FindIt_Menu.\nContinue?", "Yes", "Cancel"))
+            "Rebuilds MallEnvironment_Proper, HUD, treasures, and wiring in FindIt_Main.\nContinue?", "Yes", "Cancel"))
             return;
-
         if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
-
         RunAllSilent();
-
-        EditorUtility.DisplayDialog("Done", "FindIt Complete Setup finished — check Console.", "OK");
+        EditorUtility.DisplayDialog("Done", "FindIt rebuild finished — check Console.", "OK");
     }
 
-    // Called by FindItAutoRun (no dialogs, no user prompts)
     public static void RunAllSilent()
     {
         EnsureTag("Treasure");
+        EnsureTag("MainCamera");
+
+        CreateTreasureItemAssets();
 
         var scene = EditorSceneManager.OpenScene(MainScenePath, OpenSceneMode.Single);
-        var all = AllGOs(scene);
+        var all   = AllGOs(scene);
 
-        SetupMainCamera(all);
+        var mainCam = SetupMainCamera(all);
         SetupGameManager(all);
+        SetupCheckpoints(all);
         SetupTreasures(all);
-        SetupHUD(all, scene);
-        RebuildMall(scene, all);
+        RebuildMall(scene);
+
+        var hud = BuildHUD(mainCam, scene);
+        FixQuizCanvas(AllGOs(scene));
+        WireCheckpointsToQuizPanel(AllGOs(scene));
+        WireCountdownManager(AllGOs(scene), hud);
 
         EditorSceneManager.MarkSceneDirty(scene);
         EditorSceneManager.SaveScene(scene);
-        Debug.Log("[FindIt] FindIt_Main saved.");
-
-        SetupMenuScene();
-
-        scene = EditorSceneManager.OpenScene(MainScenePath, OpenSceneMode.Single);
-        EditorSceneManager.MarkSceneDirty(scene);
-        EditorSceneManager.SaveScene(scene);
-        Debug.Log("[FindIt] FindIt_Main re-saved.");
+        Debug.Log("[FindItRebuild] DONE — FindIt_Main saved.");
     }
 
-    // ── A + G + K : Main Camera ──────────────────────────────────────────
-    static void SetupMainCamera(GameObject[] all)
-    {
-        var go = Find(all, "Main Camera");
-        if (go == null) { Debug.LogWarning("[FindIt] Main Camera not found"); return; }
-
-        EnsureTag("MainCamera");
-        if (go.tag != "MainCamera")
-        { go.tag = "MainCamera"; Debug.Log("[FindIt] Main Camera tag set"); }
-
-        if (go.GetComponent<SimpleWalker>() == null)
-        { go.AddComponent<SimpleWalker>(); Debug.Log("[FindIt] Added SimpleWalker"); }
-
-        if (go.GetComponent<VoiceCommandHandler>() == null)
-        { go.AddComponent<VoiceCommandHandler>(); Debug.Log("[FindIt] Added VoiceCommandHandler"); }
-
-        var cam = go.GetComponent<Camera>();
-        if (cam != null && cam.clearFlags != CameraClearFlags.Skybox)
-        { cam.clearFlags = CameraClearFlags.Skybox; Debug.Log("[FindIt] Camera ClearFlags = Skybox"); }
-
-        EditorUtility.SetDirty(go);
-    }
-
-    // ── Shader helper: URP-safe (Standard alone goes pink under URP) ─────
-    static Shader _cachedShader;
-    static Shader SafeShader()
-    {
-        if (_cachedShader != null) return _cachedShader;
-        _cachedShader = Shader.Find("Universal Render Pipeline/Lit")
-                     ?? Shader.Find("Standard")
-                     ?? Shader.Find("Unlit/Color");
-        return _cachedShader;
-    }
-
-    static void SetMatColor(Material mat, Color color)
-    {
-        if (mat == null) return;
-        mat.color = color;                                  // _Color (built-in)
-        if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", color); // URP/Lit
-    }
-
-    static Material MakeColoredMat(Color color)
-    {
-        var mat = new Material(SafeShader());
-        SetMatColor(mat, color);
-        return mat;
-    }
-
-    // ── F (scene) : LeaderboardManager on GameManager ────────────────────
-    static void SetupGameManager(GameObject[] all)
-    {
-        var go = Find(all, "GameManager");
-        if (go == null) { Debug.LogWarning("[FindIt] GameManager not found"); return; }
-        if (go.GetComponent<LeaderboardManager>() == null)
-        { go.AddComponent<LeaderboardManager>(); Debug.Log("[FindIt] Added LeaderboardManager"); }
-        EditorUtility.SetDirty(go);
-    }
-
-    // ── H : Treasure objects ─────────────────────────────────────────────
-    static void SetupTreasures(GameObject[] all)
+    // ── STEP 0 : TreasureItem assets ─────────────────────────────────────
+    static void CreateTreasureItemAssets()
     {
         EnsureFolder("Assets/FindIt/Assets");
-        EnsureFolder("Assets/FindIt/Assets/Materials");
-
-        foreach (var (zoneName, tName, color) in TreasureData)
+        EnsureFolder(ItemDir);
+        foreach (var d in ItemData)
         {
-            var zone = Find(all, zoneName);
-            if (zone == null) { Debug.LogWarning($"[FindIt] {zoneName} not found"); continue; }
-
-            // Find existing or create
-            var treasure = zone.transform.Find(tName)?.gameObject;
-            if (treasure == null)
+            string path = $"{ItemDir}/{d.file}.asset";
+            var ti = AssetDatabase.LoadAssetAtPath<TreasureItem>(path);
+            if (ti == null)
             {
-                treasure = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                treasure.name = tName;
-                treasure.transform.SetParent(zone.transform, false);
-                treasure.transform.localPosition = new Vector3(0, 1.5f, 0);
-                treasure.transform.localScale = Vector3.one * 0.3f;
-
-                // Replace sphere collider with box collider
-                Object.DestroyImmediate(treasure.GetComponent<SphereCollider>());
-                treasure.AddComponent<BoxCollider>().isTrigger = false;
-
-                // Color material (URP-safe, no pink)
-                string matPath = $"Assets/FindIt/Assets/Materials/{tName}_Mat.asset";
-                var mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
-                if (mat == null)
-                {
-                    mat = MakeColoredMat(color);
-                    AssetDatabase.CreateAsset(mat, matPath);
-                }
-                else
-                {
-                    mat.shader = SafeShader();
-                    SetMatColor(mat, color);
-                    EditorUtility.SetDirty(mat);
-                }
-                treasure.GetComponent<Renderer>().sharedMaterial = mat;
-
-                treasure.AddComponent<TreasureClick>();
-                treasure.tag = "Treasure";
-                treasure.SetActive(false);
-
-                Undo.RegisterCreatedObjectUndo(treasure, $"Create {tName}");
-                Debug.Log($"[FindIt] Created {tName}");
+                ti = ScriptableObject.CreateInstance<TreasureItem>();
+                AssetDatabase.CreateAsset(ti, path);
             }
-
-            // Wire QDM.treasureObject
-            var qdm = zone.GetComponent<QuizDisplayManager>();
-            if (qdm != null)
-            {
-                var so = new SerializedObject(qdm);
-                var prop = so.FindProperty("treasureObject");
-                if (prop != null)
-                {
-                    prop.objectReferenceValue = treasure;
-                    so.ApplyModifiedProperties();
-                }
-            }
+            ti.itemName = d.name;
+            ti.question = d.q;
+            ti.answers = d.a;
+            ti.correctAnswerIndex = d.ci;
+            EditorUtility.SetDirty(ti);
         }
         AssetDatabase.SaveAssets();
     }
 
-    // ── I : HUD panels ───────────────────────────────────────────────────
-    static void SetupHUD(GameObject[] all, UnityEngine.SceneManagement.Scene scene)
+    // ── STEP A : Main Camera ─────────────────────────────────────────────
+    static GameObject SetupMainCamera(GameObject[] all)
     {
-        var hudCanvas = Find(all, "HUDCanvas");
-        if (hudCanvas == null) { Debug.LogWarning("[FindIt] HUDCanvas not found"); return; }
+        var go = Find(all, "Main Camera");
+        if (go == null) { Debug.LogWarning("[FindItRebuild] Main Camera not found"); return null; }
 
-        // Ensure overlay rendering so HUD never appears mirrored from a world camera.
-        var canvas = hudCanvas.GetComponent<Canvas>();
-        if (canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay)
-        {
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            Debug.Log("[FindIt] HUDCanvas → ScreenSpaceOverlay");
-        }
+        if (go.tag != "MainCamera") go.tag = "MainCamera";
 
-        // ── TimerText (top-center, big, dark) ────────────────────────
-        var timerGO = FindChild(hudCanvas, "TimerText");
-        if (timerGO == null)
-        {
-            timerGO = MakeContainer(hudCanvas, "TimerText", V(0.35f, 0.90f), V(0.65f, 0.99f));
-        }
-        var timerTMP = timerGO.GetComponent<TextMeshProUGUI>() ?? timerGO.AddComponent<TextMeshProUGUI>();
-        timerTMP.text = "0:00";
-        timerTMP.fontSize = 36f;
-        timerTMP.color = new Color(0.05f, 0.05f, 0.05f);
-        timerTMP.fontStyle = FontStyles.Bold;
-        timerTMP.alignment = TextAlignmentOptions.Center;
-        timerTMP.enableAutoSizing = false;
+        var cam = go.GetComponent<Camera>();
+        if (cam != null) cam.clearFlags = CameraClearFlags.Skybox;
 
-        // ── TreasureCountText (below timer) ──────────────────────────
-        var countGO = FindChild(hudCanvas, "TreasureCountText");
-        if (countGO == null)
-        {
-            countGO = MakeContainer(hudCanvas, "TreasureCountText", V(0.35f, 0.82f), V(0.65f, 0.89f));
-        }
-        var countTMP = countGO.GetComponent<TextMeshProUGUI>() ?? countGO.AddComponent<TextMeshProUGUI>();
-        countTMP.text = "Harta: 0";
-        countTMP.fontSize = 28f;
-        countTMP.color = new Color(0.05f, 0.05f, 0.05f);
-        countTMP.fontStyle = FontStyles.Bold;
-        countTMP.alignment = TextAlignmentOptions.Center;
-        countTMP.enableAutoSizing = false;
+        // Remove any extra Camera components
+        var cams = go.GetComponents<Camera>();
+        for (int i = 1; i < cams.Length; i++) Object.DestroyImmediate(cams[i]);
 
-        // HUDController on HUDCanvas
-        var hudCtrl = hudCanvas.GetComponent<HUDController>() ?? hudCanvas.AddComponent<HUDController>();
+        if (go.GetComponent<SimpleWalker>() == null)         go.AddComponent<SimpleWalker>();
+        if (go.GetComponent<VoiceCommandHandler>() == null)  go.AddComponent<VoiceCommandHandler>();
 
-        // ── LeaderboardPanel ──────────────────────────────────────────
-        var lbPanel = FindChild(hudCanvas, "LeaderboardPanel");
-        if (lbPanel == null)
-        {
-            lbPanel = MakePanel(hudCanvas, "LeaderboardPanel", V(0,0), V(1,1),
-                new Color(0.05f, 0.05f, 0.10f, 0.97f));
-            var lbDisp = lbPanel.AddComponent<LeaderboardDisplay>();
-
-            MakeLabel(lbPanel, "LBTitle", V(0.05f,0.88f), V(0.95f,0.98f),
-                "LEADERBOARD", 10f, Color.white);
-
-            var rowRoot = MakeContainer(lbPanel, "RowContainer", V(0.02f,0.1f), V(0.98f,0.87f));
-
-            for (int i = 0; i < 10; i++)
-            {
-                float rh = 0.1f;
-                var row = MakeContainer(rowRoot, $"Row_{i+1}", V(0, 1f-(i+1)*rh), V(1, 1f-i*rh));
-                float[] xs = {0f, 0.1f, 0.65f, 0.82f};
-                float[] xe = {0.1f, 0.65f, 0.82f, 1f};
-                string[] def = {$"{i+1}", "-", "-", "--:--"};
-                for (int j = 0; j < 4; j++)
-                    MakeLabel(row, $"Col{j}", V(xs[j],0), V(xe[j],1), def[j], 5f, Color.white);
-                row.SetActive(false);
-            }
-
-            // Wire LeaderboardDisplay.rowContainer
-            var lbSO = new SerializedObject(lbDisp);
-            lbSO.FindProperty("rowContainer").objectReferenceValue = rowRoot.transform;
-            lbSO.ApplyModifiedProperties();
-
-            var closeBtn = MakeButton(lbPanel, "CloseButton", V(0.35f,0.02f), V(0.65f,0.09f),
-                "CLOSE", new Color(0.5f,0.1f,0.1f));
-            BoolEvent(closeBtn.GetComponent<Button>(), lbPanel, "SetActive", false);
-
-            lbPanel.SetActive(false);
-            Debug.Log("[FindIt] Created LeaderboardPanel");
-        }
-
-        // ── ResultPanel ───────────────────────────────────────────────
-        var resultPanel = FindChild(hudCanvas, "ResultPanel");
-        if (resultPanel == null)
-        {
-            resultPanel = MakePanel(hudCanvas, "ResultPanel", V(0.1f,0.2f), V(0.9f,0.8f),
-                new Color(0f,0f,0f,0.85f));
-
-            MakeLabel(resultPanel, "ResultText", V(0.05f,0.55f), V(0.95f,0.95f),
-                "MISSION COMPLETE!\nTreasures: 5/5\nTime: 00:00", 7f, Color.white);
-
-            var backBtn = MakeButton(resultPanel, "BackToMenuButton",
-                V(0.05f,0.35f), V(0.48f,0.50f), "Back to Menu", new Color(0.15f,0.35f,0.7f));
-            VoidEvent(backBtn.GetComponent<Button>(), hudCtrl, "BackToMenuFromResult");
-
-            var lbBtn2 = MakeButton(resultPanel, "ViewLeaderboardButton",
-                V(0.52f,0.35f), V(0.95f,0.50f), "Leaderboard", new Color(0.2f,0.5f,0.2f));
-            VoidEvent(lbBtn2.GetComponent<Button>(), hudCtrl, "ViewLeaderboard");
-
-            resultPanel.SetActive(false);
-            Debug.Log("[FindIt] Created ResultPanel");
-        }
-
-        // ── ExitButton ────────────────────────────────────────────────
-        if (FindChild(hudCanvas, "ExitButton") == null)
-        {
-            var eb = MakeButton(hudCanvas, "ExitButton", V(0.8f,0.86f), V(1f,1f),
-                "EXIT", new Color(0.6f,0.1f,0.1f));
-            VoidEvent(eb.GetComponent<Button>(), hudCtrl, "ExitToMenu");
-            Debug.Log("[FindIt] Created ExitButton");
-        }
-
-        // Wire HUDController
-        var hso = new SerializedObject(hudCtrl);
-        hso.FindProperty("resultPanel").objectReferenceValue = resultPanel;
-        hso.FindProperty("leaderboardPanel").objectReferenceValue = lbPanel;
-        hso.ApplyModifiedProperties();
-
-        // Wire CountdownManager.resultPanel + timerText
-        var hud = Find(AllGOs(scene), "HUD");
-        var cm = hud?.GetComponent<CountdownManager>();
-        if (cm != null)
-        {
-            var cmSO = new SerializedObject(cm);
-            cmSO.FindProperty("resultPanel").objectReferenceValue = resultPanel;
-            var tProp = cmSO.FindProperty("timerText");
-            if (tProp != null) tProp.objectReferenceValue = timerTMP;
-            cmSO.ApplyModifiedProperties();
-            Debug.Log("[FindIt] Wired CountdownManager.resultPanel + timerText");
-        }
-
-        // Wire CountTreasureText into every TreasureClick in the scene.
-        foreach (var go in AllGOs(scene))
-        {
-            var tc = go.GetComponent<TreasureClick>();
-            if (tc == null) continue;
-            var tcSO = new SerializedObject(tc);
-            var tProp = tcSO.FindProperty("CountTreasureText");
-            if (tProp != null) tProp.objectReferenceValue = countTMP;
-            tcSO.ApplyModifiedProperties();
-        }
-        Debug.Log("[FindIt] Wired TreasureClick.CountTreasureText for all treasures");
-
-        EditorUtility.SetDirty(hudCanvas);
+        EditorUtility.SetDirty(go);
+        Debug.Log("[FindItRebuild] Main Camera configured.");
+        return go;
     }
 
-    // ── L : Mall environment ─────────────────────────────────────────────
-    static void RebuildMall(UnityEngine.SceneManagement.Scene scene, GameObject[] all)
+    // ── STEP B : GameManager ─────────────────────────────────────────────
+    static void SetupGameManager(GameObject[] all)
     {
-        var placeholder = Find(all, "MallEnvironment_Placeholder");
-        if (placeholder != null)
+        var go = Find(all, "GameManager");
+        if (go == null) { Debug.LogWarning("[FindItRebuild] GameManager not found"); return; }
+        if (go.GetComponent<LeaderboardManager>() == null) go.AddComponent<LeaderboardManager>();
+        if (go.GetComponent<CountdownManager>() == null)   go.AddComponent<CountdownManager>();
+        EditorUtility.SetDirty(go);
+        Debug.Log("[FindItRebuild] GameManager components ensured.");
+    }
+
+    // ── STEP C : CheckpointZones ─────────────────────────────────────────
+    static void SetupCheckpoints(GameObject[] all)
+    {
+        // Position checkpoints along the corridor at the shop Z positions.
+        var positions = new Dictionary<string, Vector3>
         {
-            Undo.DestroyObjectImmediate(placeholder);
-            Debug.Log("[FindIt] Deleted MallEnvironment_Placeholder");
+            { "CheckpointZone_NewEra",      new Vector3(0f, 1f,  5f) },
+            { "CheckpointZone_Puma",        new Vector3(0f, 1f, 10f) },
+            { "CheckpointZone_NewBalance",  new Vector3(0f, 1f, 15f) },
+            { "CheckpointZone_Hoops",       new Vector3(0f, 1f, 20f) },
+            { "CheckpointZone_Vans",        new Vector3(0f, 1f, 25f) },
+            { "CheckpointZone",             new Vector3(0f, 1f, 35f) },
+        };
+
+        foreach (var kv in positions)
+        {
+            var cp = Find(all, kv.Key);
+            if (cp == null)
+            {
+                cp = new GameObject(kv.Key);
+                cp.transform.position = kv.Value;
+                Undo.RegisterCreatedObjectUndo(cp, $"Create {kv.Key}");
+                Debug.Log($"[FindItRebuild] Created {kv.Key} at {kv.Value}");
+            }
+
+            var bc = cp.GetComponent<BoxCollider>() ?? cp.AddComponent<BoxCollider>();
+            bc.isTrigger = true;
+            bc.size = new Vector3(2f, 3f, 2f);
+            bc.center = Vector3.zero;
+
+            if (cp.GetComponent<TreasureCheckpointDetector>() == null)
+                cp.AddComponent<TreasureCheckpointDetector>();
+
+            if (cp.GetComponent<QuizDisplayManager>() == null)
+                cp.AddComponent<QuizDisplayManager>();
+
+            EditorUtility.SetDirty(cp);
+        }
+    }
+
+    // ── STEP D : Treasure objects ────────────────────────────────────────
+    static void SetupTreasures(GameObject[] all)
+    {
+        EnsureFolder("Assets/FindIt/Assets/Materials");
+        foreach (var t in Treasures)
+        {
+            var zone = Find(AllGOsActive(), t.zone);
+            if (zone == null) { Debug.LogWarning($"[FindItRebuild] {t.zone} not found"); continue; }
+
+            var treasure = zone.transform.Find(t.tName)?.gameObject;
+            if (treasure == null)
+            {
+                treasure = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                treasure.name = t.tName;
+                treasure.transform.SetParent(zone.transform, false);
+                Undo.RegisterCreatedObjectUndo(treasure, $"Create {t.tName}");
+            }
+            treasure.transform.localPosition = new Vector3(0, 1.5f, 0);
+            treasure.transform.localScale = new Vector3(0.4f, 0.4f, 0.4f);
+
+            var sc = treasure.GetComponent<SphereCollider>();
+            if (sc != null) Object.DestroyImmediate(sc);
+            var box = treasure.GetComponent<BoxCollider>() ?? treasure.AddComponent<BoxCollider>();
+            box.isTrigger = false;
+
+            string matPath = $"Assets/FindIt/Assets/Materials/{t.tName}_Mat.asset";
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
+            if (mat == null)
+            {
+                mat = MakeMat(t.color);
+                AssetDatabase.CreateAsset(mat, matPath);
+            }
+            else
+            {
+                mat.shader = SafeShader();
+                SetColor(mat, t.color);
+                EditorUtility.SetDirty(mat);
+            }
+            treasure.GetComponent<Renderer>().sharedMaterial = mat;
+
+            if (treasure.GetComponent<TreasureClick>() == null)
+                treasure.AddComponent<TreasureClick>();
+
+            treasure.tag = "Treasure";
+            treasure.SetActive(false);
+            EditorUtility.SetDirty(treasure);
+        }
+    }
+
+    // ── STEP E : Build HUD under Main Camera ─────────────────────────────
+    static (GameObject hudCanvas, TextMeshProUGUI timer, TextMeshProUGUI treasure,
+            GameObject resultPanel, TextMeshProUGUI resultText) BuildHUD(
+        GameObject mainCam, UnityEngine.SceneManagement.Scene scene)
+    {
+        if (mainCam == null)
+        {
+            Debug.LogError("[FindItRebuild] Cannot build HUD without Main Camera.");
+            return default;
         }
 
-        // Always rebuild so latest shader/rotation/colour fixes are applied.
-        var existing = Find(AllGOs(scene), "MallEnvironment_Proper");
-        if (existing != null)
+        // Destroy any prior HUD child(ren) for a clean rebuild.
+        for (int i = mainCam.transform.childCount - 1; i >= 0; i--)
         {
-            Undo.DestroyObjectImmediate(existing);
-            Debug.Log("[FindIt] Rebuilt MallEnvironment_Proper");
+            var c = mainCam.transform.GetChild(i);
+            if (c.name == "HUD") Object.DestroyImmediate(c.gameObject);
         }
+        // Also kill any stray top-level "HUDCanvas" that previous setups created.
+        foreach (var r in scene.GetRootGameObjects())
+            if (r.name == "HUDCanvas") Object.DestroyImmediate(r);
+
+        var hud = new GameObject("HUD");
+        hud.transform.SetParent(mainCam.transform, false);
+        hud.transform.localPosition = Vector3.zero;
+        hud.transform.localRotation = Quaternion.identity;
+
+        var canvasGO = new GameObject("HUDCanvas", typeof(RectTransform));
+        canvasGO.transform.SetParent(hud.transform, false);
+        var canvasRT = (RectTransform)canvasGO.transform;
+        canvasRT.localPosition = new Vector3(0, 0, 0.6f);
+        canvasRT.localRotation = Quaternion.identity;
+        canvasRT.localScale = new Vector3(0.001f, 0.001f, 0.001f);
+        canvasRT.sizeDelta = new Vector2(600f, 400f);
+
+        var canvas = canvasGO.AddComponent<Canvas>();
+        canvas.renderMode = RenderMode.WorldSpace;
+        canvasGO.AddComponent<CanvasScaler>();
+        canvasGO.AddComponent<GraphicRaycaster>();
+
+        // TimerText: center anchor, pos(0,180,0), size(200,50)
+        var timerGO = NewUI(canvasGO, "TimerText", new Vector2(0, 180), new Vector2(200, 50));
+        var timerTMP = timerGO.AddComponent<TextMeshProUGUI>();
+        timerTMP.text = "0:00";
+        timerTMP.fontSize = 48f;
+        timerTMP.color = Color.black;
+        timerTMP.fontStyle = FontStyles.Bold;
+        timerTMP.alignment = TextAlignmentOptions.Center;
+
+        // TreasureText: pos(0,130,0), size(200,40)
+        var treasGO = NewUI(canvasGO, "TreasureText", new Vector2(0, 130), new Vector2(200, 40));
+        var treasTMP = treasGO.AddComponent<TextMeshProUGUI>();
+        treasTMP.text = "Treasures: 0/5";
+        treasTMP.fontSize = 36f;
+        treasTMP.color = Color.black;
+        treasTMP.alignment = TextAlignmentOptions.Center;
+
+        // HUDController on HUDCanvas — backs Exit / Back buttons
+        var hudCtrl = canvasGO.AddComponent<HUDController>();
+
+        // ExitButton: pos(-60,180,0), size(100,40), top-right of canvas — use offset from center
+        // To anchor top-right: anchor at (1,1) with anchored position (-60,180).
+        var exitGO = NewUIAnchored(canvasGO, "ExitButton",
+            new Vector2(1, 1), new Vector2(1, 1),
+            new Vector2(-60, 180), new Vector2(100, 40));
+        var exitImg = exitGO.AddComponent<Image>();
+        exitImg.color = new Color(0.6f, 0.1f, 0.1f);
+        var exitBtn = exitGO.AddComponent<Button>();
+        exitBtn.targetGraphic = exitImg;
+        var exitLbl = NewUI(exitGO, "Label", Vector2.zero, new Vector2(100, 40));
+        var exitLblTMP = exitLbl.AddComponent<TextMeshProUGUI>();
+        exitLblTMP.text = "Exit";
+        exitLblTMP.fontSize = 22f;
+        exitLblTMP.color = Color.white;
+        exitLblTMP.fontStyle = FontStyles.Bold;
+        exitLblTMP.alignment = TextAlignmentOptions.Center;
+        WireVoidClick(exitBtn, hudCtrl, "ExitToMenu");
+
+        // ResultPanel: pos(0,0,0), size(400,250), dark bg, INACTIVE
+        var resultGO = NewUI(canvasGO, "ResultPanel", Vector2.zero, new Vector2(400, 250));
+        var resultImg = resultGO.AddComponent<Image>();
+        resultImg.color = new Color(0f, 0f, 0f, 0.8f);
+
+        var resultTextGO = NewUI(resultGO, "ResultText", new Vector2(0, 40), new Vector2(380, 150));
+        var resultTMP = resultTextGO.AddComponent<TextMeshProUGUI>();
+        resultTMP.text = "";
+        resultTMP.fontSize = 32f;
+        resultTMP.color = Color.white;
+        resultTMP.fontStyle = FontStyles.Bold;
+        resultTMP.alignment = TextAlignmentOptions.Center;
+
+        var backGO = NewUI(resultGO, "BackToMenuButton", new Vector2(0, -80), new Vector2(220, 50));
+        var backImg = backGO.AddComponent<Image>();
+        backImg.color = new Color(0.15f, 0.35f, 0.7f);
+        var backBtn = backGO.AddComponent<Button>();
+        backBtn.targetGraphic = backImg;
+        var backLbl = NewUI(backGO, "Label", Vector2.zero, new Vector2(220, 50));
+        var backLblTMP = backLbl.AddComponent<TextMeshProUGUI>();
+        backLblTMP.text = "Back to Menu";
+        backLblTMP.fontSize = 22f;
+        backLblTMP.color = Color.white;
+        backLblTMP.fontStyle = FontStyles.Bold;
+        backLblTMP.alignment = TextAlignmentOptions.Center;
+        WireVoidClick(backBtn, hudCtrl, "BackToMenuFromResult");
+
+        resultGO.SetActive(false);
+
+        // Wire HUDController.resultPanel
+        var hcSO = new SerializedObject(hudCtrl);
+        hcSO.FindProperty("resultPanel").objectReferenceValue = resultGO;
+        hcSO.ApplyModifiedProperties();
+
+        Debug.Log("[FindItRebuild] Built HUD canvas under Main Camera.");
+        return (canvasGO, timerTMP, treasTMP, resultGO, resultTMP);
+    }
+
+    // ── STEP F : QuizCanvas to WorldSpace ────────────────────────────────
+    static void FixQuizCanvas(GameObject[] all)
+    {
+        var qc = Find(all, "QuizCanvas");
+        if (qc == null) { Debug.LogWarning("[FindItRebuild] QuizCanvas not found"); return; }
+        var canvas = qc.GetComponent<Canvas>();
+        if (canvas != null && canvas.renderMode != RenderMode.WorldSpace)
+        {
+            canvas.renderMode = RenderMode.WorldSpace;
+            qc.transform.localPosition = new Vector3(0, 0, 1f);
+            qc.transform.localScale = new Vector3(0.001f, 0.001f, 0.001f);
+            Debug.Log("[FindItRebuild] QuizCanvas → WorldSpace");
+        }
+        // Strip missing scripts on children
+        foreach (Transform t in qc.GetComponentsInChildren<Transform>(true))
+            GameObjectUtility.RemoveMonoBehavioursWithMissingScript(t.gameObject);
+    }
+
+    // ── Wire each CheckpointZone's TreasureCheckpointDetector + QDM ──────
+    static void WireCheckpointsToQuizPanel(GameObject[] all)
+    {
+        var quizPanel    = Find(all, "QuizPanel");
+        var questionText = Find(all, "QuestionText");
+        var btnA = Find(all, "AnswerButton_A");
+        var btnB = Find(all, "AnswerButton_B");
+        var btnC = Find(all, "AnswerButton_C");
+
+        var map = new Dictionary<string, string>
+        {
+            { "CheckpointZone_NewEra",      "NewEra_Item"    },
+            { "CheckpointZone_Puma",        "Puma_Item"      },
+            { "CheckpointZone_NewBalance",  "NewBalance_Item"},
+            { "CheckpointZone_Hoops",       "Hoops_Item"     },
+            { "CheckpointZone_Vans",        "Vans_Item"      },
+            { "CheckpointZone",             null             },
+        };
+
+        foreach (var kv in map)
+        {
+            var cp = Find(all, kv.Key);
+            if (cp == null) continue;
+
+            // TreasureCheckpointDetector.TreasureQuiz → QuizPanel
+            var tcd = cp.GetComponent<TreasureCheckpointDetector>();
+            if (tcd != null && quizPanel != null)
+            {
+                var so = new SerializedObject(tcd);
+                so.FindProperty("TreasureQuiz").objectReferenceValue = quizPanel;
+                so.ApplyModifiedProperties();
+            }
+
+            // QuizDisplayManager wiring
+            var qdm = cp.GetComponent<QuizDisplayManager>();
+            if (qdm != null)
+            {
+                var qso = new SerializedObject(qdm);
+                if (questionText != null) qso.FindProperty("questionText").objectReferenceValue = questionText.GetComponent<TextMeshProUGUI>();
+                if (quizPanel != null)    qso.FindProperty("quizPanel").objectReferenceValue   = quizPanel;
+
+                var btnsArr = qso.FindProperty("answerButtons");
+                btnsArr.arraySize = 3;
+                btnsArr.GetArrayElementAtIndex(0).objectReferenceValue = btnA != null ? btnA.GetComponent<Button>() : null;
+                btnsArr.GetArrayElementAtIndex(1).objectReferenceValue = btnB != null ? btnB.GetComponent<Button>() : null;
+                btnsArr.GetArrayElementAtIndex(2).objectReferenceValue = btnC != null ? btnC.GetComponent<Button>() : null;
+
+                if (kv.Value != null)
+                {
+                    var ti = AssetDatabase.LoadAssetAtPath<TreasureItem>($"{ItemDir}/{kv.Value}.asset");
+                    if (ti != null) qso.FindProperty("currentItem").objectReferenceValue = ti;
+                }
+
+                // Wire treasureObject
+                var treasure = cp.transform.Cast<Transform>()
+                    .FirstOrDefault(t => t.name.StartsWith("Treasure_"));
+                if (treasure != null)
+                    qso.FindProperty("treasureObject").objectReferenceValue = treasure.gameObject;
+
+                qso.ApplyModifiedProperties();
+            }
+        }
+        Debug.Log("[FindItRebuild] Wired checkpoints → QuizPanel + QDM.");
+    }
+
+    // ── Wire CountdownManager fields ─────────────────────────────────────
+    static void WireCountdownManager(GameObject[] all,
+        (GameObject hudCanvas, TextMeshProUGUI timer, TextMeshProUGUI treasure,
+         GameObject resultPanel, TextMeshProUGUI resultText) hud)
+    {
+        var gm = Find(all, "GameManager");
+        var cm = gm?.GetComponent<CountdownManager>();
+        if (cm == null) { Debug.LogWarning("[FindItRebuild] CountdownManager not found"); return; }
+
+        var so = new SerializedObject(cm);
+        if (hud.timer != null)        so.FindProperty("timerText").objectReferenceValue    = hud.timer;
+        if (hud.treasure != null)     so.FindProperty("treasureText").objectReferenceValue = hud.treasure;
+        if (hud.resultPanel != null)  so.FindProperty("resultPanel").objectReferenceValue  = hud.resultPanel;
+        if (hud.resultText != null)   so.FindProperty("resultText").objectReferenceValue   = hud.resultText;
+        so.ApplyModifiedProperties();
+        Debug.Log("[FindItRebuild] CountdownManager fields wired.");
+    }
+
+    // ── STEP G : Mall environment ────────────────────────────────────────
+    static void RebuildMall(UnityEngine.SceneManagement.Scene scene)
+    {
+        foreach (var r in scene.GetRootGameObjects())
+            if (r.name == "MallEnvironment_Proper" || r.name == "MallEnvironment_Placeholder")
+                Object.DestroyImmediate(r);
 
         var root = new GameObject("MallEnvironment_Proper");
-        Undo.RegisterCreatedObjectUndo(root, "Create MallEnvironment_Proper");
+        Undo.RegisterCreatedObjectUndo(root, "Create Mall");
 
         // Corridor
-        Prim(root, "Floor",     PrimitiveType.Plane, new Vector3(0,0,30),   Vector3.zero,         new Vector3(20,1,60), new Color(0.90f,0.90f,0.90f), true);
-        Prim(root, "LeftWall",  PrimitiveType.Cube,  new Vector3(-10,2.5f,30),Vector3.zero,        new Vector3(0.3f,5,60),new Color(0.85f,0.85f,0.85f), true);
-        Prim(root, "RightWall", PrimitiveType.Cube,  new Vector3(10,2.5f,30), Vector3.zero,        new Vector3(0.3f,5,60),new Color(0.85f,0.85f,0.85f), true);
-        Prim(root, "Ceiling",   PrimitiveType.Plane, new Vector3(0,5,30),     new Vector3(180,0,0),new Vector3(20,1,60), new Color(0.95f,0.95f,0.95f), false);
+        Prim(root, "Floor",     PrimitiveType.Plane, new Vector3(0, 0, 30),    Vector3.zero,         new Vector3(2, 1, 6),  new Color(0.92f, 0.92f, 0.90f), true);
+        Prim(root, "LeftWall",  PrimitiveType.Cube,  new Vector3(-10, 2.5f, 30), Vector3.zero,        new Vector3(0.5f, 5, 60), new Color(0.88f, 0.88f, 0.88f), true);
+        Prim(root, "RightWall", PrimitiveType.Cube,  new Vector3(10, 2.5f, 30),  Vector3.zero,        new Vector3(0.5f, 5, 60), new Color(0.88f, 0.88f, 0.88f), true);
+        Prim(root, "Ceiling",   PrimitiveType.Plane, new Vector3(0, 5.1f, 30),   new Vector3(180,0,0), new Vector3(2, 1, 6),  new Color(0.96f, 0.96f, 0.96f), false);
 
-        float[] lzs = {5,10,15,20,25};
-        foreach (float lz in lzs)
+        // Lights
+        float[] lzs = { 5, 10, 15, 20, 25 };
+        foreach (var lz in lzs)
         {
             var lg = new GameObject($"PointLight_Z{lz}");
             lg.transform.SetParent(root.transform, false);
-            lg.transform.position = new Vector3(0, 4.8f, lz);
+            lg.transform.position = new Vector3(0, 4.5f, lz);
             var l = lg.AddComponent<Light>();
-            l.type = LightType.Point; l.intensity = 1.5f; l.range = 8f; l.color = Color.white;
+            l.type = LightType.Point;
+            l.intensity = 1.2f;
+            l.range = 10f;
+            l.color = new Color(1f, 0.95f, 0.85f);
         }
 
         // Shops
-        foreach (var (z, sname, brand) in ShopData)
+        foreach (var (z, sname, brand) in Shops)
         {
-            var sr = new GameObject($"Shop_{sname.Replace(" ","")}");
+            var sr = new GameObject($"Shop_{sname.Replace(" ", "")}");
             sr.transform.SetParent(root.transform, false);
-            var grey7  = new Color(0.7f,0.7f,0.7f);
-            var grey6  = new Color(0.6f,0.6f,0.6f);
-            var brown  = new Color(0.5f,0.35f,0.2f);
 
-            Prim(sr,"BackWall",      PrimitiveType.Cube,  new Vector3(-8,2,z),          Vector3.zero,new Vector3(6,4,0.3f),     brand, false);
-            Prim(sr,"LeftPartition", PrimitiveType.Cube,  new Vector3(-5.1f,2,z-1.35f), Vector3.zero,new Vector3(0.3f,4,3),     grey7, true);
-            Prim(sr,"RightPartition",PrimitiveType.Cube,  new Vector3(-10.9f,2,z-1.35f),Vector3.zero,new Vector3(0.3f,4,3),     grey7, true);
-            Prim(sr,"FloorMat",      PrimitiveType.Plane, new Vector3(-8,0.01f,z-1.5f), Vector3.zero,new Vector3(6,1,3),        new Color(0.8f,0.8f,0.78f),false);
-            Prim(sr,"ArchTop",       PrimitiveType.Cube,  new Vector3(-8,4.1f,z-2.7f),  Vector3.zero,new Vector3(6.3f,0.4f,0.3f),grey6,false);
-            Prim(sr,"ArchLeft",      PrimitiveType.Cube,  new Vector3(-11,2,z-2.7f),    Vector3.zero,new Vector3(0.3f,4,0.3f),  grey6, true);
-            Prim(sr,"ArchRight",     PrimitiveType.Cube,  new Vector3(-5,2,z-2.7f),     Vector3.zero,new Vector3(0.3f,4,0.3f),  grey6, true);
-            Prim(sr,"DisplayTable",  PrimitiveType.Cube,  new Vector3(-8,0.45f,z-2),    Vector3.zero,new Vector3(2,0.9f,1),     brown, true);
-            Prim(sr,"ProductSphere", PrimitiveType.Sphere,new Vector3(-8,0.95f,z-2),    Vector3.zero,new Vector3(0.3f,0.3f,0.3f),brand,false);
-            Prim(sr,"SignBoard",     PrimitiveType.Cube,  new Vector3(-8,4.5f,z-2.6f),  Vector3.zero,new Vector3(3,0.8f,0.1f),  new Color(0.1f,0.1f,0.1f),false);
+            var grey75 = new Color(0.75f, 0.75f, 0.75f);
+            var grey70 = new Color(0.70f, 0.70f, 0.70f);
+            var brown  = new Color(0.55f, 0.38f, 0.22f);
+            var matCol = new Color(0.85f, 0.83f, 0.80f);
 
-            var signGO = new GameObject("ShopNameTMP");
-            signGO.transform.SetParent(sr.transform, false);
-            signGO.transform.position  = new Vector3(-8, 4.5f, z - 2.55f);
-            signGO.transform.rotation  = Quaternion.identity;   // (0,0,0) — no mirroring
-            var tmp = signGO.AddComponent<TextMeshPro>();
-            tmp.text = sname; tmp.fontSize = 4f;
-            tmp.fontStyle = FontStyles.Bold; tmp.color = Color.white;
-            tmp.alignment = TextAlignmentOptions.Center;
+            Prim(sr, "BackWall",   PrimitiveType.Cube,   new Vector3(-8, 2,       z),       Vector3.zero, new Vector3(6, 4, 0.3f),    brand,  false);
+            Prim(sr, "LeftWall",   PrimitiveType.Cube,   new Vector3(-5.15f, 2,   z - 1.5f), Vector3.zero, new Vector3(0.3f, 4, 3),   grey75, true);
+            Prim(sr, "RightWall",  PrimitiveType.Cube,   new Vector3(-10.85f, 2,  z - 1.5f), Vector3.zero, new Vector3(0.3f, 4, 3),   grey75, true);
+            Prim(sr, "FloorMat",   PrimitiveType.Cube,   new Vector3(-8, 0.025f,  z - 1.5f), Vector3.zero, new Vector3(6, 0.05f, 3),  matCol, false);
+            Prim(sr, "ArchLeft",   PrimitiveType.Cube,   new Vector3(-10.85f, 2.25f, z - 3), Vector3.zero, new Vector3(0.3f, 4.5f, 0.3f), grey70, true);
+            Prim(sr, "ArchRight",  PrimitiveType.Cube,   new Vector3(-5.15f, 2.25f, z - 3), Vector3.zero, new Vector3(0.3f, 4.5f, 0.3f), grey70, true);
+            Prim(sr, "ArchTop",    PrimitiveType.Cube,   new Vector3(-8, 4.5f,    z - 3),   Vector3.zero, new Vector3(6, 0.4f, 0.3f), grey70, false);
+            Prim(sr, "Table",      PrimitiveType.Cube,   new Vector3(-8, 0.425f,  z - 2),   Vector3.zero, new Vector3(2, 0.85f, 0.9f), brown,  true);
+            Prim(sr, "Product",    PrimitiveType.Sphere, new Vector3(-8, 0.975f,  z - 2),   Vector3.zero, new Vector3(0.25f, 0.25f, 0.25f), brand, false);
+            Prim(sr, "SignBoard",  PrimitiveType.Cube,   new Vector3(-8, 4.55f,   z - 2.9f), Vector3.zero, new Vector3(3.5f, 0.7f, 0.1f), new Color(0.08f, 0.08f, 0.08f), false);
+
+            var labelGO = new GameObject("ShopLabel");
+            labelGO.transform.SetParent(sr.transform, false);
+            labelGO.transform.position = new Vector3(-8, 4.55f, z - 2.84f);
+            labelGO.transform.rotation = Quaternion.identity;
+            labelGO.transform.localScale = new Vector3(0.5f, 0.5f, 0.5f);
+            var lblTMP = labelGO.AddComponent<TextMeshPro>();
+            lblTMP.text = sname;
+            lblTMP.fontSize = 6f;
+            lblTMP.color = Color.white;
+            lblTMP.fontStyle = FontStyles.Bold;
+            lblTMP.alignment = TextAlignmentOptions.Center;
         }
 
-        // Entrance
-        Prim(root,"LeftPillar",  PrimitiveType.Cube,new Vector3(-9,2.5f,0),Vector3.zero,new Vector3(0.5f,5,0.5f),Color.white,false);
-        Prim(root,"RightPillar", PrimitiveType.Cube,new Vector3( 9,2.5f,0),Vector3.zero,new Vector3(0.5f,5,0.5f),Color.white,false);
-        Prim(root,"TopBeam",     PrimitiveType.Cube,new Vector3(0,5,0),    Vector3.zero,new Vector3(18.5f,0.5f,0.5f),Color.white,false);
+        // Entrance at Z=-2
+        Prim(root, "PillarL", PrimitiveType.Cube, new Vector3(-9, 2.5f, -2), Vector3.zero, new Vector3(0.6f, 5, 0.6f), new Color(0.95f, 0.95f, 0.95f), true);
+        Prim(root, "PillarR", PrimitiveType.Cube, new Vector3( 9, 2.5f, -2), Vector3.zero, new Vector3(0.6f, 5, 0.6f), new Color(0.95f, 0.95f, 0.95f), true);
+        Prim(root, "Beam",    PrimitiveType.Cube, new Vector3( 0, 5,   -2), Vector3.zero, new Vector3(19, 0.5f, 0.6f), new Color(0.95f, 0.95f, 0.95f), false);
 
-        var welGO = new GameObject("WelcomeTMP");
-        welGO.transform.SetParent(root.transform,false);
-        welGO.transform.position = new Vector3(0,4.5f,-0.3f);
-        welGO.transform.rotation = Quaternion.identity;   // (0,0,0) — no mirroring
+        var welGO = new GameObject("WelcomeSign");
+        welGO.transform.SetParent(root.transform, false);
+        welGO.transform.position = new Vector3(0, 4f, -2.4f);
+        welGO.transform.rotation = Quaternion.identity;
+        welGO.transform.localScale = new Vector3(0.8f, 0.8f, 0.8f);
         var welTMP = welGO.AddComponent<TextMeshPro>();
-        welTMP.text = "FindIt! Mall Adventure"; welTMP.fontSize = 6f;
-        welTMP.fontStyle = FontStyles.Bold; welTMP.color = new Color(1f,0.8f,0f);
+        welTMP.text = "FindIt! Mall Adventure";
+        welTMP.fontSize = 5f;
+        welTMP.color = new Color(1f, 0.85f, 0.1f);
+        welTMP.fontStyle = FontStyles.Bold;
         welTMP.alignment = TextAlignmentOptions.Center;
 
         // End wall
-        Prim(root,"EndWall",PrimitiveType.Cube,new Vector3(0,2.5f,55),Vector3.zero,new Vector3(20,5,0.3f),new Color(0.6f,0.6f,0.6f),false);
+        Prim(root, "EndWall", PrimitiveType.Cube, new Vector3(0, 2.5f, 58), Vector3.zero, new Vector3(20.5f, 5, 0.5f), new Color(0.75f, 0.75f, 0.75f), true);
 
-        Debug.Log("[FindIt] Built MallEnvironment_Proper");
+        Debug.Log("[FindItRebuild] Mall built.");
     }
 
-    // ── M : FindIt_Menu scene ────────────────────────────────────────────
-    static void SetupMenuScene()
-    {
-        if (!System.IO.File.Exists(System.IO.Path.Combine(Application.dataPath, "..", MenuScenePath)))
-        {
-            Debug.LogWarning("[FindIt] FindIt_Menu.unity not found — skipping.");
-            return;
-        }
-
-        var menuScene = EditorSceneManager.OpenScene(MenuScenePath, OpenSceneMode.Single);
-        var allGOs    = AllGOs(menuScene);
-
-        var menuCanvas = Find(allGOs, "MenuCanvas");
-        var menuMgr    = FindComp<FindItMenuManager>(allGOs);
-
-        // Ensure LeaderboardManager exists in menu scene for GetTopScores()
-        var menuManagerGO = Find(allGOs, "MenuManager");
-        if (menuManagerGO != null && menuManagerGO.GetComponent<LeaderboardManager>() == null)
-        {
-            menuManagerGO.AddComponent<LeaderboardManager>();
-            Debug.Log("[FindIt] Added LeaderboardManager to MenuManager");
-        }
-
-        if (menuCanvas == null || menuMgr == null)
-        {
-            Debug.LogWarning("[FindIt] MenuCanvas or FindItMenuManager not found in FindIt_Menu — saving anyway.");
-            EditorSceneManager.MarkSceneDirty(menuScene);
-            EditorSceneManager.SaveScene(menuScene);
-            return;
-        }
-
-        // PlayerName InputField
-        var nameInput = FindChildComp<TMP_InputField>(menuCanvas, "PlayerNameInput");
-        if (nameInput == null)
-        {
-            var iGO = new GameObject("PlayerNameInput", typeof(RectTransform));
-            iGO.transform.SetParent(menuCanvas.transform, false);
-            Anchor(iGO, V(0.10f,0.675f), V(0.90f,0.73f));
-
-            var bg = iGO.AddComponent<Image>();
-            bg.color = new Color(0.15f,0.15f,0.25f);
-
-            nameInput = iGO.AddComponent<TMP_InputField>();
-            nameInput.targetGraphic = bg;
-
-            // Text area
-            var txtGO = new GameObject("Text", typeof(RectTransform));
-            txtGO.transform.SetParent(iGO.transform, false);
-            Anchor(txtGO, V(0.01f,0), V(0.99f,1));
-            var txt = txtGO.AddComponent<TextMeshProUGUI>();
-            txt.color = Color.white; txt.fontSize = 18f;
-            txt.alignment = TextAlignmentOptions.MidlineLeft;
-            nameInput.textComponent = txt;
-
-            // Placeholder
-            var phGO = new GameObject("Placeholder", typeof(RectTransform));
-            phGO.transform.SetParent(iGO.transform, false);
-            Anchor(phGO, V(0.01f,0), V(0.99f,1));
-            var ph = phGO.AddComponent<TextMeshProUGUI>();
-            ph.text = "Masukkan nama kamu...";
-            ph.color = new Color(0.5f,0.5f,0.5f); ph.fontSize = 18f;
-            ph.alignment = TextAlignmentOptions.MidlineLeft;
-            ph.fontStyle = FontStyles.Italic;
-            nameInput.placeholder = ph;
-
-            Debug.Log("[FindIt] Created PlayerNameInput in MenuCanvas");
-        }
-
-        // Leaderboard Button (between Credits and Exit)
-        if (FindChild(menuCanvas, "LeaderboardButton") == null)
-        {
-            var exitGO = FindChild(menuCanvas, "ExitButton");
-            var eRT    = exitGO?.GetComponent<RectTransform>();
-            float y0 = 0.205f, y1 = 0.311f;
-            if (eRT != null)
-            {
-                // shift exit button down
-                float origY0 = eRT.anchorMin.y, origY1 = eRT.anchorMax.y;
-                float gap = origY1 - origY0 + 0.01f;
-                eRT.anchorMin = new Vector2(eRT.anchorMin.x, origY0 - gap);
-                eRT.anchorMax = new Vector2(eRT.anchorMax.x, origY0 - 0.01f);
-                y0 = origY0; y1 = origY1;
-            }
-            var lbBtnGO = MakeButton(menuCanvas,"LeaderboardButton", V(0.10f,y0), V(0.90f,y1),
-                "Leaderboard", new Color(0.14f,0.38f,0.72f));
-            VoidEvent(lbBtnGO.GetComponent<Button>(), menuMgr, "ShowLeaderboard");
-            Debug.Log("[FindIt] Created LeaderboardButton in MenuCanvas");
-        }
-
-        // LeaderboardPanel in MenuCanvas
-        var menuLBPanel = FindChild(menuCanvas, "LeaderboardPanel");
-        if (menuLBPanel == null)
-        {
-            menuLBPanel = MakePanel(menuCanvas,"LeaderboardPanel", V(0,0), V(1,1),
-                new Color(0.04f,0.05f,0.10f,0.98f));
-            var lbDisp = menuLBPanel.AddComponent<LeaderboardDisplay>();
-
-            MakeLabel(menuLBPanel,"LBTitle", V(0.05f,0.88f), V(0.95f,0.98f),
-                "LEADERBOARD", 28f, Color.white);
-
-            var rowRoot = MakeContainer(menuLBPanel,"RowContainer", V(0.02f,0.1f), V(0.98f,0.87f));
-            float rh = 0.1f;
-            for (int i = 0; i < 10; i++)
-            {
-                var row = MakeContainer(rowRoot,$"Row_{i+1}", V(0, 1f-(i+1)*rh), V(1, 1f-i*rh));
-                float[] xs={0f,0.1f,0.65f,0.82f}; float[] xe={0.1f,0.65f,0.82f,1f};
-                string[] def={$"{i+1}","-","-","--:--"};
-                for (int j=0;j<4;j++)
-                    MakeLabel(row,$"Col{j}", V(xs[j],0), V(xe[j],1), def[j], 16f, Color.white);
-                row.SetActive(false);
-            }
-            var so2 = new SerializedObject(lbDisp);
-            so2.FindProperty("rowContainer").objectReferenceValue = rowRoot.transform;
-            so2.ApplyModifiedProperties();
-
-            var closeBtn2 = MakeButton(menuLBPanel,"CloseButton", V(0.35f,0.02f), V(0.65f,0.08f),
-                "CLOSE", new Color(0.45f,0.10f,0.10f));
-            BoolEvent(closeBtn2.GetComponent<Button>(), menuLBPanel, "SetActive", false);
-
-            menuLBPanel.SetActive(false);
-            Debug.Log("[FindIt] Created LeaderboardPanel in MenuCanvas");
-        }
-
-        // Wire FindItMenuManager
-        var mso = new SerializedObject(menuMgr);
-        SetProp(mso, "playerNameInput", nameInput);
-        SetProp(mso, "leaderboardPanel", menuLBPanel);
-        mso.ApplyModifiedProperties();
-        Debug.Log("[FindIt] Wired FindItMenuManager refs");
-
-        EditorSceneManager.MarkSceneDirty(menuScene);
-        EditorSceneManager.SaveScene(menuScene);
-        Debug.Log("[FindIt] FindIt_Menu saved.");
-    }
-
-    // ── UI helpers ────────────────────────────────────────────────────────
-
-    static GameObject MakeContainer(GameObject parent, string name, Vector2 aMin, Vector2 aMax)
-    {
-        var go = new GameObject(name, typeof(RectTransform));
-        go.transform.SetParent(parent.transform, false);
-        Anchor(go, aMin, aMax);
-        return go;
-    }
-
-    static GameObject MakePanel(GameObject parent, string name, Vector2 aMin, Vector2 aMax, Color bg)
-    {
-        var go = MakeContainer(parent, name, aMin, aMax);
-        go.AddComponent<Image>().color = bg;
-        return go;
-    }
-
-    static GameObject MakeLabel(GameObject parent, string name, Vector2 aMin, Vector2 aMax,
-        string text, float size, Color color)
-    {
-        var go = MakeContainer(parent, name, aMin, aMax);
-        var t = go.AddComponent<TextMeshProUGUI>();
-        t.text = text; t.fontSize = size; t.color = color;
-        t.alignment = TextAlignmentOptions.Center; t.enableWordWrapping = true;
-        return go;
-    }
-
-    static GameObject MakeButton(GameObject parent, string name, Vector2 aMin, Vector2 aMax,
-        string label, Color bg)
-    {
-        var go = MakePanel(parent, name, aMin, aMax, bg);
-        var img = go.GetComponent<Image>();
-        var btn = go.AddComponent<Button>();
-        btn.targetGraphic = img;
-
-        var lbl = MakeContainer(go, "Label", V(0.02f,0.05f), V(0.98f,0.95f));
-        var t = lbl.AddComponent<TextMeshProUGUI>();
-        t.text = label; t.alignment = TextAlignmentOptions.Center;
-        t.color = Color.white; t.fontStyle = FontStyles.Bold;
-        t.enableAutoSizing = true; t.fontSizeMin = 4f; t.fontSizeMax = 28f;
-        return go;
-    }
-
-    static void Anchor(GameObject go, Vector2 aMin, Vector2 aMax)
-    {
-        var rt = go.GetComponent<RectTransform>();
-        rt.anchorMin = aMin; rt.anchorMax = aMax;
-        rt.offsetMin = rt.offsetMax = Vector2.zero;
-    }
-
-    // ── Primitive helper ─────────────────────────────────────────────────
-
+    // ── Primitive helper ────────────────────────────────────────────────
     static void Prim(GameObject parent, string name, PrimitiveType type,
-        Vector3 pos, Vector3 euler, Vector3 scale, Color color, bool useMeshCollider)
+        Vector3 pos, Vector3 euler, Vector3 scale, Color color, bool meshCollider)
     {
         var go = GameObject.CreatePrimitive(type);
         go.name = name;
         go.transform.SetParent(parent.transform, false);
-        go.transform.position   = pos;
+        go.transform.position = pos;
         go.transform.eulerAngles = euler;
-        go.transform.localScale  = scale;
-        go.GetComponent<Renderer>().sharedMaterial = MakeColoredMat(color);
-
-        if (useMeshCollider && type != PrimitiveType.Plane)
+        go.transform.localScale = scale;
+        go.GetComponent<Renderer>().sharedMaterial = MakeMat(color);
+        if (meshCollider && type != PrimitiveType.Plane)
         {
-            Object.DestroyImmediate(go.GetComponent<Collider>());
-            go.AddComponent<MeshCollider>().convex = false;
+            var old = go.GetComponent<Collider>();
+            if (old != null) Object.DestroyImmediate(old);
+            var mc = go.AddComponent<MeshCollider>();
+            mc.convex = false;
         }
     }
 
-    // ── UnityEvent helpers ───────────────────────────────────────────────
+    // ── Shader helper (URP-safe; Standard alone goes pink under URP) ────
+    static Shader _shader;
+    static Shader SafeShader()
+    {
+        if (_shader != null) return _shader;
+        _shader = Shader.Find("Universal Render Pipeline/Lit")
+               ?? Shader.Find("Standard")
+               ?? Shader.Find("Unlit/Color");
+        return _shader;
+    }
 
-    static void VoidEvent(Button btn, Object target, string method)
+    static void SetColor(Material mat, Color color)
+    {
+        mat.color = color;
+        if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", color);
+    }
+
+    static Material MakeMat(Color color)
+    {
+        var m = new Material(SafeShader());
+        SetColor(m, color);
+        return m;
+    }
+
+    // ── UI helpers ──────────────────────────────────────────────────────
+    static GameObject NewUI(GameObject parent, string name, Vector2 localPos, Vector2 size)
+    {
+        var go = new GameObject(name, typeof(RectTransform));
+        go.transform.SetParent(parent.transform, false);
+        var rt = (RectTransform)go.transform;
+        rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+        rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.anchoredPosition = localPos;
+        rt.sizeDelta = size;
+        return go;
+    }
+
+    static GameObject NewUIAnchored(GameObject parent, string name,
+        Vector2 anchorMin, Vector2 anchorMax, Vector2 anchoredPos, Vector2 size)
+    {
+        var go = new GameObject(name, typeof(RectTransform));
+        go.transform.SetParent(parent.transform, false);
+        var rt = (RectTransform)go.transform;
+        rt.anchorMin = anchorMin;
+        rt.anchorMax = anchorMax;
+        rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.anchoredPosition = anchoredPos;
+        rt.sizeDelta = size;
+        return go;
+    }
+
+    static void WireVoidClick(Button btn, Object target, string method)
     {
         if (btn == null || target == null) return;
         var so = new SerializedObject(btn);
         var calls = so.FindProperty("m_OnClick.m_PersistentCalls.m_Calls");
         if (calls == null) return;
-        for (int i = 0; i < calls.arraySize; i++)
-        {
-            var c = calls.GetArrayElementAtIndex(i);
-            if (c.FindPropertyRelative("m_Target").objectReferenceValue == target &&
-                c.FindPropertyRelative("m_MethodName").stringValue == method) return;
-        }
         calls.InsertArrayElementAtIndex(calls.arraySize);
         var el = calls.GetArrayElementAtIndex(calls.arraySize - 1);
         el.FindPropertyRelative("m_Target").objectReferenceValue = target;
         el.FindPropertyRelative("m_MethodName").stringValue = method;
-        el.FindPropertyRelative("m_Mode").enumValueIndex = 1;       // Void
-        el.FindPropertyRelative("m_CallState").enumValueIndex = 2;  // RuntimeOnly
-        so.ApplyModifiedPropertiesWithoutUndo();
-    }
-
-    static void BoolEvent(Button btn, GameObject target, string method, bool arg)
-    {
-        if (btn == null || target == null) return;
-        var so = new SerializedObject(btn);
-        var calls = so.FindProperty("m_OnClick.m_PersistentCalls.m_Calls");
-        if (calls == null) return;
-        calls.InsertArrayElementAtIndex(calls.arraySize);
-        var el = calls.GetArrayElementAtIndex(calls.arraySize - 1);
-        el.FindPropertyRelative("m_Target").objectReferenceValue = target;
-        el.FindPropertyRelative("m_MethodName").stringValue = method;
-        el.FindPropertyRelative("m_Mode").enumValueIndex = 6;       // Bool
-        el.FindPropertyRelative("m_Arguments.m_BoolArgument").boolValue = arg;
+        el.FindPropertyRelative("m_Mode").enumValueIndex = 1;
         el.FindPropertyRelative("m_CallState").enumValueIndex = 2;
         so.ApplyModifiedPropertiesWithoutUndo();
     }
 
-    // ── Tag / folder helpers ─────────────────────────────────────────────
-
+    // ── Tag / folder / scene traversal ──────────────────────────────────
     static void EnsureTag(string tag)
     {
-        var tm = new SerializedObject(
-            AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/TagManager.asset")[0]);
+        var tm = new SerializedObject(AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/TagManager.asset")[0]);
         var tags = tm.FindProperty("tags");
         for (int i = 0; i < tags.arraySize; i++)
             if (tags.GetArrayElementAtIndex(i).stringValue == tag) return;
         tags.InsertArrayElementAtIndex(tags.arraySize);
         tags.GetArrayElementAtIndex(tags.arraySize - 1).stringValue = tag;
         tm.ApplyModifiedProperties();
-        Debug.Log($"[FindIt] Created tag '{tag}'");
     }
 
     static void EnsureFolder(string path)
@@ -697,13 +636,17 @@ public static class FindItCompleteSetup
         AssetDatabase.CreateFolder(path.Substring(0, slash), path.Substring(slash + 1));
     }
 
-    // ── Scene traversal ──────────────────────────────────────────────────
-
     static GameObject[] AllGOs(UnityEngine.SceneManagement.Scene scene)
     {
         var list = new List<GameObject>();
         foreach (var r in scene.GetRootGameObjects()) Collect(r, list);
         return list.ToArray();
+    }
+
+    static GameObject[] AllGOsActive()
+    {
+        var scene = UnityEditor.SceneManagement.EditorSceneManager.GetActiveScene();
+        return AllGOs(scene);
     }
 
     static void Collect(GameObject go, List<GameObject> list)
@@ -714,34 +657,4 @@ public static class FindItCompleteSetup
 
     static GameObject Find(GameObject[] gos, string name) =>
         gos.FirstOrDefault(g => g.name == name);
-
-    static GameObject FindChild(GameObject parent, string name)
-    {
-        if (parent == null) return null;
-        var t = parent.transform.Find(name);
-        if (t != null) return t.gameObject;
-        foreach (Transform c in parent.transform)
-        {
-            var found = FindChild(c.gameObject, name);
-            if (found != null) return found;
-        }
-        return null;
-    }
-
-    static T FindChildComp<T>(GameObject parent, string name) where T : Component =>
-        FindChild(parent, name)?.GetComponent<T>();
-
-    static T FindComp<T>(GameObject[] gos) where T : Component
-    {
-        foreach (var go in gos) { var c = go.GetComponent<T>(); if (c != null) return c; }
-        return null;
-    }
-
-    static void SetProp(SerializedObject so, string prop, Object val)
-    {
-        var p = so.FindProperty(prop);
-        if (p != null) p.objectReferenceValue = val;
-    }
-
-    static Vector2 V(float x, float y) => new Vector2(x, y);
 }

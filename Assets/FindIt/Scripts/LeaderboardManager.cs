@@ -2,65 +2,49 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
+[Serializable]
+public class ScoreEntry
+{
+    public string name;
+    public int treasures;
+    public float time;
+}
+
+[Serializable]
+class ScoreList
+{
+    public List<ScoreEntry> entries = new List<ScoreEntry>();
+}
+
 public class LeaderboardManager : MonoBehaviour
 {
-    public static LeaderboardManager Instance;
-
-    [Serializable]
-    public class ScoreEntry
-    {
-        public string playerName;
-        public int treasureCount;
-        public float elapsedTime;
-        public string timestamp;
-    }
-
-    [Serializable]
-    class ScoreList
-    {
-        public List<ScoreEntry> entries;
-    }
+    public static LeaderboardManager Instance { get; private set; }
 
     void Awake()
     {
+        if (Instance != null) { Destroy(gameObject); return; }
         Instance = this;
     }
 
     public void SaveScore(string name, int treasures, float time)
     {
-        var scores = GetTopScores();
-        scores.Add(new ScoreEntry
-        {
-            playerName = name,
-            treasureCount = treasures,
-            elapsedTime = time,
-            timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
-        });
-        scores.Sort((a, b) =>
-        {
-            if (b.treasureCount != a.treasureCount)
-                return b.treasureCount.CompareTo(a.treasureCount);
-            return a.elapsedTime.CompareTo(b.elapsedTime);
-        });
-        if (scores.Count > 10)
-            scores = scores.GetRange(0, 10);
-        PlayerPrefs.SetString("Leaderboard", JsonUtility.ToJson(new ScoreList { entries = scores }));
+        var list = GetAll();
+        list.Add(new ScoreEntry { name = name, treasures = treasures, time = time });
+        list.Sort((a, b) => a.treasures != b.treasures ? b.treasures - a.treasures : a.time.CompareTo(b.time));
+        if (list.Count > 10) list.RemoveRange(10, list.Count - 10);
+        PlayerPrefs.SetString("Leaderboard", JsonUtility.ToJson(new ScoreList { entries = list }));
         PlayerPrefs.Save();
     }
 
-    public List<ScoreEntry> GetTopScores() => LoadScores();
-
-    public static List<ScoreEntry> LoadScores()
+    public List<ScoreEntry> GetAll()
     {
         string json = PlayerPrefs.GetString("Leaderboard", "");
         if (string.IsNullOrEmpty(json)) return new List<ScoreEntry>();
         return JsonUtility.FromJson<ScoreList>(json)?.entries ?? new List<ScoreEntry>();
     }
 
-    public string FormatTime(float t)
+    public static string FormatTime(float t)
     {
-        int minutes = Mathf.FloorToInt(t / 60f);
-        int seconds = Mathf.FloorToInt(t % 60f);
-        return string.Format("{0:00}:{1:00}", minutes, seconds);
+        return string.Format("{0}:{1:00}", Mathf.FloorToInt(t / 60f), Mathf.FloorToInt(t % 60f));
     }
 }
