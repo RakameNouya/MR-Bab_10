@@ -1,21 +1,22 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 using TMPro;
 using System.Collections.Generic;
 
 public class FindItMenuManager : MonoBehaviour
 {
-    [Header("Panels (world-space GameObjects)")]
+    [Header("Panels (children of Menu_Canvas)")]
     public GameObject mainMenuPanel;
     public GameObject tutorialPanel;
     public GameObject creditsPanel;
     public GameObject leaderboardPanel;
     public GameObject notifPanel;
-    public TextMeshPro notifText;
+    public TextMeshProUGUI notifText;
 
     [Header("Username")]
-    public Microsoft.MixedReality.Toolkit.Experimental.UI.MRTKTMPInputField usernameInputField;
-    public TextMeshPro helloText;
+    public TMP_InputField usernameInputField;
+    public TextMeshProUGUI helloText;
 
     [Header("Leaderboard rows parent")]
     public Transform rowContainer;
@@ -26,21 +27,20 @@ public class FindItMenuManager : MonoBehaviour
         string saved = PlayerPrefs.GetString("PlayerName", "");
         if (!string.IsNullOrEmpty(saved))
         {
-            if (helloText) helloText.text = "Halo, " + saved + "!";
+            if (usernameInputField) usernameInputField.text = saved;
+            if (helloText) helloText.text = "Halo, " + saved + "! 👋";
         }
-        ShowMain();
+        HideAll();
     }
 
     public void SaveUsername()
     {
-        string name = usernameInputField != null
-            ? usernameInputField.text.Trim()
-            : "";
+        string name = usernameInputField != null ? usernameInputField.text.Trim() : "";
         if (string.IsNullOrEmpty(name)) { Notif("Masukkan nama dulu!"); return; }
         PlayerPrefs.SetString("PlayerName", name);
         PlayerPrefs.Save();
-        if (helloText) helloText.text = "Halo, " + name + "!";
-        Notif("Nama disimpan: " + name);
+        if (helloText) helloText.text = "Halo, " + name + "! 👋";
+        Notif("✓ Nama disimpan: " + name);
     }
 
     public void StartGame()
@@ -74,13 +74,14 @@ public class FindItMenuManager : MonoBehaviour
     void PopulateLeaderboard()
     {
         if (rowContainer == null || rowPrefab3D == null) return;
-        for (int i = rowContainer.childCount - 1; i >= 1; i--)
+        for (int i = rowContainer.childCount - 1; i >= 0; i--)
             Destroy(rowContainer.GetChild(i).gameObject);
         var scores = LeaderboardManager.Instance?.GetAll() ?? new List<ScoreEntry>();
         for (int i = 0; i < Mathf.Min(scores.Count, 15); i++)
         {
             var row = Instantiate(rowPrefab3D, rowContainer);
-            var labels = row.GetComponentsInChildren<TextMeshPro>();
+            row.SetActive(true);
+            var labels = row.GetComponentsInChildren<TextMeshProUGUI>();
             if (labels.Length >= 4)
             {
                 labels[0].text = (i + 1).ToString();

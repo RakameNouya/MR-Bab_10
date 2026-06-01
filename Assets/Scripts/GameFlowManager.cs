@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 using TMPro;
-using Microsoft.MixedReality.Toolkit.UI;
 using System.Collections;
 using Photon.Pun;
 
@@ -9,37 +9,35 @@ public class GameFlowManager : MonoBehaviourPunCallbacks
 {
     public static GameFlowManager Instance { get; private set; }
 
-    [Header("HUD Panel (world-space, RadialView)")]
-    public GameObject hudPanel;
-    public TextMeshPro timerText;
-    public TextMeshPro scoreText;
-    public TextMeshPro roomInfoText;
+    [Header("HUD (child of Main Camera, World Space Canvas)")]
+    public TextMeshProUGUI timerText;
+    public TextMeshProUGUI scoreText;
+    public TextMeshProUGUI roomInfoText;
 
-    [Header("Shop Status (5 Renderer components, color changed at runtime)")]
-    public Renderer[] shopStatusRenderers;
+    [Header("Shop Status Dots (Image components on HUD)")]
+    public Image[] shopStatusDots;
     public Color colorNotVisited = new Color(0.4f, 0.4f, 0.4f, 1f);
     public Color colorInProgress = new Color(1f, 0.85f, 0f, 1f);
     public Color colorClaimed    = new Color(0.2f, 0.85f, 0.2f, 1f);
 
-    [Header("Quiz Panel (world-space, RadialView)")]
+    [Header("Quiz Canvas (Follow solver)")]
     public GameObject quizPanel;
-    public TextMeshPro quizProgressText;
-    public TextMeshPro questionText;
-    public GameObject[] answerButtonObjects;
-    public TextMeshPro[] answerLabels;
+    public TextMeshProUGUI quizProgressText;
+    public TextMeshProUGUI questionText;
+    public Button[] answerButtons;
 
-    [Header("Result Panel")]
+    [Header("Result Canvas")]
     public GameObject resultPanel;
-    public TextMeshPro resultText;
+    public TextMeshProUGUI resultText;
 
     [Header("Notification (billboard, brief)")]
     public GameObject notifPanel;
-    public TextMeshPro notifText;
-    public Renderer notifRenderer;
+    public TextMeshProUGUI notifText;
+    public Image notifBg;
 
     [Header("Hint Panel")]
     public GameObject hintPanel;
-    public TextMeshPro hintText;
+    public TextMeshProUGUI hintText;
 
     [Header("Settings")]
     public int totalShops = 5;
@@ -80,9 +78,9 @@ public class GameFlowManager : MonoBehaviourPunCallbacks
     {
         if (timerText) timerText.text = "0:00";
         if (scoreText) scoreText.text = "Harta: 0/" + totalShops;
-        if (shopStatusRenderers != null)
-            foreach (var r in shopStatusRenderers)
-                if (r) r.material.color = colorNotVisited;
+        if (shopStatusDots != null)
+            foreach (var img in shopStatusDots)
+                if (img) img.color = colorNotVisited;
     }
 
     public void StartTimer()
@@ -92,14 +90,14 @@ public class GameFlowManager : MonoBehaviourPunCallbacks
 
     public void SetShopStatus(int idx, ShopStatus s)
     {
-        if (shopStatusRenderers == null || idx >= shopStatusRenderers.Length) return;
-        var r = shopStatusRenderers[idx];
-        if (r == null) return;
+        if (shopStatusDots == null || idx >= shopStatusDots.Length) return;
+        var img = shopStatusDots[idx];
+        if (img == null) return;
         switch (s)
         {
-            case ShopStatus.NotVisited: r.material.color = colorNotVisited; break;
-            case ShopStatus.InProgress: r.material.color = colorInProgress; break;
-            case ShopStatus.Claimed:    r.material.color = colorClaimed;    break;
+            case ShopStatus.NotVisited: img.color = colorNotVisited; break;
+            case ShopStatus.InProgress: img.color = colorInProgress; break;
+            case ShopStatus.Claimed:    img.color = colorClaimed;    break;
         }
     }
 
@@ -113,21 +111,21 @@ public class GameFlowManager : MonoBehaviourPunCallbacks
             quizProgressText.text = string.Format("Pertanyaan {0}/{1}   Benar: {2}", qIdx + 1, total, correct);
         if (questionText) questionText.text = data.question;
 
-        for (int i = 0; i < answerButtonObjects.Length; i++)
+        for (int i = 0; i < answerButtons.Length; i++)
         {
-            bool active = i < data.answers.Length;
-            answerButtonObjects[i]?.SetActive(active);
-            if (!active) continue;
-            if (i < answerLabels.Length && answerLabels[i])
-                answerLabels[i].text = data.answers[i];
-
             int idx = i;
-            var interactable = answerButtonObjects[i]?.GetComponent<Interactable>();
-            if (interactable != null)
-            {
-                interactable.OnClick.RemoveAllListeners();
-                interactable.OnClick.AddListener(() => OnAnswer(idx));
-            }
+            bool active = i < data.answers.Length;
+            answerButtons[i].gameObject.SetActive(active);
+            if (!active) continue;
+
+            var lbl = answerButtons[i].GetComponentInChildren<TextMeshProUGUI>();
+            if (lbl) lbl.text = data.answers[i];
+
+            answerButtons[i].onClick.RemoveAllListeners();
+            answerButtons[i].onClick.AddListener(() => OnAnswer(idx));
+
+            var img = answerButtons[i].GetComponent<Image>();
+            if (img) img.color = new Color(0.14f, 0.38f, 0.72f);
         }
     }
 
@@ -148,13 +146,11 @@ public class GameFlowManager : MonoBehaviourPunCallbacks
 
     IEnumerator FlashAnswer(int idx, bool correct)
     {
-        if (idx >= answerButtonObjects.Length) yield break;
-        var rend = answerButtonObjects[idx]?.GetComponentInChildren<Renderer>();
-        if (rend == null) yield break;
-        Color orig = rend.material.color;
-        rend.material.color = correct ? Color.green : Color.red;
+        if (idx >= answerButtons.Length) yield break;
+        var img = answerButtons[idx].GetComponent<Image>();
+        if (img == null) yield break;
+        img.color = correct ? Color.green : Color.red;
         yield return new WaitForSeconds(0.45f);
-        if (rend) rend.material.color = orig;
     }
 
     public void CollectTreasure(string shopName, string nextHint)
@@ -186,7 +182,7 @@ public class GameFlowManager : MonoBehaviourPunCallbacks
         LeaderboardManager.Instance?.SaveScore(name, collected, elapsed);
         if (resultPanel) resultPanel.SetActive(true);
         if (resultText) resultText.text = string.Format(
-            "MISSION COMPLETE!\n{0}\nHarta: {1}/{2}\nWaktu: {3}",
+            "🎉 MISSION COMPLETE!\n{0}\nHarta: {1}/{2}\nWaktu: {3}",
             name, totalShops, totalShops, LeaderboardManager.FormatTime(elapsed));
     }
 
@@ -203,8 +199,7 @@ public class GameFlowManager : MonoBehaviourPunCallbacks
     {
         if (notifPanel == null) return;
         if (notifText) notifText.text = msg;
-        if (notifRenderer) notifRenderer.material.color =
-            new Color(tint.r * 0.25f, tint.g * 0.25f, tint.b * 0.25f, 0.9f);
+        if (notifBg) notifBg.color = new Color(tint.r * 0.25f, tint.g * 0.25f, tint.b * 0.25f, 0.9f);
         notifPanel.SetActive(true);
         if (notifCoroutine != null) StopCoroutine(notifCoroutine);
         notifCoroutine = StartCoroutine(HideAfter(notifPanel, duration));
