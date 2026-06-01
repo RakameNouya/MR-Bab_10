@@ -11,20 +11,25 @@ public class CountdownManager : MonoBehaviour
     [SerializeField] GameObject resultPanel;
 
     float elapsedTime;
-    bool isRunning = false;
+    bool isRunning;
 
     void Awake()
     {
         Instance = this;
+        elapsedTime = 0f;
+        isRunning = false;
+    }
+
+    void Start()
+    {
+        UpdateDisplay();
     }
 
     void Update()
     {
-        if (isRunning)
-        {
-            elapsedTime += Time.deltaTime;
-            UpdateDisplay();
-        }
+        if (!isRunning) return;
+        elapsedTime += Time.deltaTime;
+        UpdateDisplay();
     }
 
     void UpdateDisplay()
@@ -32,18 +37,18 @@ public class CountdownManager : MonoBehaviour
         if (timerText == null) return;
         int minutes = Mathf.FloorToInt(elapsedTime / 60f);
         int seconds = Mathf.FloorToInt(elapsedTime % 60f);
-        timerText.text = string.Format("{0:00}:{1:00}", minutes, seconds);
+        timerText.text = string.Format("{0}:{1:00}", minutes, seconds);
     }
 
     public void StartTimer()
     {
+        if (isRunning) return;
         isRunning = true;
     }
 
     public void CheckAllCollected(int count)
     {
-        if (count >= 5)
-            GameOver();
+        if (count >= 5) GameOver();
     }
 
     void GameOver()
@@ -57,7 +62,7 @@ public class CountdownManager : MonoBehaviour
             {
                 int minutes = Mathf.FloorToInt(elapsedTime / 60f);
                 int seconds = Mathf.FloorToInt(elapsedTime % 60f);
-                resultText.text = $"MISSION COMPLETE!\nTreasures: 5/5\nTime: {minutes:00}:{seconds:00}";
+                resultText.text = $"MISSION COMPLETE!\nTreasures: 5/5\nTime: {minutes}:{seconds:00}";
             }
         }
         string playerName = PlayerPrefs.GetString("PlayerName", "Pemain");

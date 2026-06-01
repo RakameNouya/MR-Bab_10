@@ -79,6 +79,10 @@ public static class FindItCompleteSetup
         var go = Find(all, "Main Camera");
         if (go == null) { Debug.LogWarning("[FindIt] Main Camera not found"); return; }
 
+        EnsureTag("MainCamera");
+        if (go.tag != "MainCamera")
+        { go.tag = "MainCamera"; Debug.Log("[FindIt] Main Camera tag set"); }
+
         if (go.GetComponent<SimpleWalker>() == null)
         { go.AddComponent<SimpleWalker>(); Debug.Log("[FindIt] Added SimpleWalker"); }
 
@@ -90,6 +94,31 @@ public static class FindItCompleteSetup
         { cam.clearFlags = CameraClearFlags.Skybox; Debug.Log("[FindIt] Camera ClearFlags = Skybox"); }
 
         EditorUtility.SetDirty(go);
+    }
+
+    // ── Shader helper: URP-safe (Standard alone goes pink under URP) ─────
+    static Shader _cachedShader;
+    static Shader SafeShader()
+    {
+        if (_cachedShader != null) return _cachedShader;
+        _cachedShader = Shader.Find("Universal Render Pipeline/Lit")
+                     ?? Shader.Find("Standard")
+                     ?? Shader.Find("Unlit/Color");
+        return _cachedShader;
+    }
+
+    static void SetMatColor(Material mat, Color color)
+    {
+        if (mat == null) return;
+        mat.color = color;                                  // _Color (built-in)
+        if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", color); // URP/Lit
+    }
+
+    static Material MakeColoredMat(Color color)
+    {
+        var mat = new Material(SafeShader());
+        SetMatColor(mat, color);
+        return mat;
     }
 
     // ── F (scene) : LeaderboardManager on GameManager ────────────────────
@@ -127,13 +156,19 @@ public static class FindItCompleteSetup
                 Object.DestroyImmediate(treasure.GetComponent<SphereCollider>());
                 treasure.AddComponent<BoxCollider>().isTrigger = false;
 
-                // Color material
+                // Color material (URP-safe, no pink)
                 string matPath = $"Assets/FindIt/Assets/Materials/{tName}_Mat.asset";
                 var mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
                 if (mat == null)
                 {
-                    mat = new Material(Shader.Find("Standard")) { color = color };
+                    mat = MakeColoredMat(color);
                     AssetDatabase.CreateAsset(mat, matPath);
+                }
+                else
+                {
+                    mat.shader = SafeShader();
+                    SetMatColor(mat, color);
+                    EditorUtility.SetDirty(mat);
                 }
                 treasure.GetComponent<Renderer>().sharedMaterial = mat;
 
@@ -166,6 +201,42 @@ public static class FindItCompleteSetup
     {
         var hudCanvas = Find(all, "HUDCanvas");
         if (hudCanvas == null) { Debug.LogWarning("[FindIt] HUDCanvas not found"); return; }
+
+        // Ensure overlay rendering so HUD never appears mirrored from a world camera.
+        var canvas = hudCanvas.GetComponent<Canvas>();
+        if (canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay)
+        {
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            Debug.Log("[FindIt] HUDCanvas → ScreenSpaceOverlay");
+        }
+
+        // ── TimerText (top-center, big, dark) ────────────────────────
+        var timerGO = FindChild(hudCanvas, "TimerText");
+        if (timerGO == null)
+        {
+            timerGO = MakeContainer(hudCanvas, "TimerText", V(0.35f, 0.90f), V(0.65f, 0.99f));
+        }
+        var timerTMP = timerGO.GetComponent<TextMeshProUGUI>() ?? timerGO.AddComponent<TextMeshProUGUI>();
+        timerTMP.text = "0:00";
+        timerTMP.fontSize = 36f;
+        timerTMP.color = new Color(0.05f, 0.05f, 0.05f);
+        timerTMP.fontStyle = FontStyles.Bold;
+        timerTMP.alignment = TextAlignmentOptions.Center;
+        timerTMP.enableAutoSizing = false;
+
+        // ── TreasureCountText (below timer) ──────────────────────────
+        var countGO = FindChild(hudCanvas, "TreasureCountText");
+        if (countGO == null)
+        {
+            countGO = MakeContainer(hudCanvas, "TreasureCountText", V(0.35f, 0.82f), V(0.65f, 0.89f));
+        }
+        var countTMP = countGO.GetComponent<TextMeshProUGUI>() ?? countGO.AddComponent<TextMeshProUGUI>();
+        countTMP.text = "Harta: 0";
+        countTMP.fontSize = 28f;
+        countTMP.color = new Color(0.05f, 0.05f, 0.05f);
+        countTMP.fontStyle = FontStyles.Bold;
+        countTMP.alignment = TextAlignmentOptions.Center;
+        countTMP.enableAutoSizing = false;
 
         // HUDController on HUDCanvas
         var hudCtrl = hudCanvas.GetComponent<HUDController>() ?? hudCanvas.AddComponent<HUDController>();
@@ -245,16 +316,30 @@ public static class FindItCompleteSetup
         hso.FindProperty("leaderboardPanel").objectReferenceValue = lbPanel;
         hso.ApplyModifiedProperties();
 
-        // Wire CountdownManager.resultPanel
+        // Wire CountdownManager.resultPanel + timerText
         var hud = Find(AllGOs(scene), "HUD");
         var cm = hud?.GetComponent<CountdownManager>();
         if (cm != null)
         {
             var cmSO = new SerializedObject(cm);
             cmSO.FindProperty("resultPanel").objectReferenceValue = resultPanel;
+            var tProp = cmSO.FindProperty("timerText");
+            if (tProp != null) tProp.objectReferenceValue = timerTMP;
             cmSO.ApplyModifiedProperties();
-            Debug.Log("[FindIt] Wired CountdownManager.resultPanel");
+            Debug.Log("[FindIt] Wired CountdownManager.resultPanel + timerText");
         }
+
+        // Wire CountTreasureText into every TreasureClick in the scene.
+        foreach (var go in AllGOs(scene))
+        {
+            var tc = go.GetComponent<TreasureClick>();
+            if (tc == null) continue;
+            var tcSO = new SerializedObject(tc);
+            var tProp = tcSO.FindProperty("CountTreasureText");
+            if (tProp != null) tProp.objectReferenceValue = countTMP;
+            tcSO.ApplyModifiedProperties();
+        }
+        Debug.Log("[FindIt] Wired TreasureClick.CountTreasureText for all treasures");
 
         EditorUtility.SetDirty(hudCanvas);
     }
@@ -269,8 +354,13 @@ public static class FindItCompleteSetup
             Debug.Log("[FindIt] Deleted MallEnvironment_Placeholder");
         }
 
-        if (Find(AllGOs(scene), "MallEnvironment_Proper") != null)
-        { Debug.Log("[FindIt] MallEnvironment_Proper already exists"); return; }
+        // Always rebuild so latest shader/rotation/colour fixes are applied.
+        var existing = Find(AllGOs(scene), "MallEnvironment_Proper");
+        if (existing != null)
+        {
+            Undo.DestroyObjectImmediate(existing);
+            Debug.Log("[FindIt] Rebuilt MallEnvironment_Proper");
+        }
 
         var root = new GameObject("MallEnvironment_Proper");
         Undo.RegisterCreatedObjectUndo(root, "Create MallEnvironment_Proper");
@@ -314,7 +404,7 @@ public static class FindItCompleteSetup
             var signGO = new GameObject("ShopNameTMP");
             signGO.transform.SetParent(sr.transform, false);
             signGO.transform.position  = new Vector3(-8, 4.5f, z - 2.55f);
-            signGO.transform.rotation  = Quaternion.Euler(0, 180, 0);
+            signGO.transform.rotation  = Quaternion.identity;   // (0,0,0) — no mirroring
             var tmp = signGO.AddComponent<TextMeshPro>();
             tmp.text = sname; tmp.fontSize = 4f;
             tmp.fontStyle = FontStyles.Bold; tmp.color = Color.white;
@@ -329,7 +419,7 @@ public static class FindItCompleteSetup
         var welGO = new GameObject("WelcomeTMP");
         welGO.transform.SetParent(root.transform,false);
         welGO.transform.position = new Vector3(0,4.5f,-0.3f);
-        welGO.transform.rotation = Quaternion.Euler(0,180,0);
+        welGO.transform.rotation = Quaternion.identity;   // (0,0,0) — no mirroring
         var welTMP = welGO.AddComponent<TextMeshPro>();
         welTMP.text = "FindIt! Mall Adventure"; welTMP.fontSize = 6f;
         welTMP.fontStyle = FontStyles.Bold; welTMP.color = new Color(1f,0.8f,0f);
@@ -537,8 +627,7 @@ public static class FindItCompleteSetup
         go.transform.position   = pos;
         go.transform.eulerAngles = euler;
         go.transform.localScale  = scale;
-        var mat = new Material(Shader.Find("Standard")) { color = color };
-        go.GetComponent<Renderer>().sharedMaterial = mat;
+        go.GetComponent<Renderer>().sharedMaterial = MakeColoredMat(color);
 
         if (useMeshCollider && type != PrimitiveType.Plane)
         {
