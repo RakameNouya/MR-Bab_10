@@ -6,6 +6,7 @@ public class PhotonRoomManager : MonoBehaviourPunCallbacks
 {
     void Start()
     {
+        PhotonNetwork.OfflineMode = true;
         PhotonNetwork.ConnectUsingSettings();
     }
 
