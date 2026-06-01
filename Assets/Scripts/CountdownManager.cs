@@ -22,6 +22,22 @@ public class CountdownManager : MonoBehaviour
         Collected = 0;
     }
 
+    void Start()
+    {
+        if (timerText == null)
+        {
+            var go = GameObject.Find("TimerText");
+            if (go != null) timerText = go.GetComponent<TextMeshProUGUI>();
+        }
+        if (treasureText == null)
+        {
+            var go = GameObject.Find("TreasureText");
+            if (go != null) treasureText = go.GetComponent<TextMeshProUGUI>();
+        }
+        if (timerText) timerText.text = "0:00";
+        if (treasureText) treasureText.text = "Treasures: 0/" + TOTAL;
+    }
+
     void Update()
     {
         if (!running) return;
@@ -29,9 +45,15 @@ public class CountdownManager : MonoBehaviour
         int m = Mathf.FloorToInt(elapsed / 60f);
         int s = Mathf.FloorToInt(elapsed % 60f);
         if (timerText) timerText.text = string.Format("{0}:{1:00}", m, s);
+        if (Time.frameCount % 60 == 0) Debug.Log("Timer: " + elapsed);
     }
 
-    public void StartTimer() { if (!running) running = true; }
+    public void StartTimer()
+    {
+        if (running) return;
+        running = true;
+        Debug.Log(">>> StartTimer: running=true");
+    }
 
     public void OnTreasureCollected()
     {

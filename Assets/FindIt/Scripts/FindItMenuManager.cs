@@ -18,7 +18,7 @@ public class FindItMenuManager : MonoBehaviour
         if (string.IsNullOrEmpty(name)) name = "Pemain";
         PlayerPrefs.SetString("PlayerName", name);
         PlayerPrefs.Save();
-        SceneManager.LoadScene("FindIt_Main");
+        SceneManager.LoadScene(1);
     }
 
     public void ToggleTutorial()

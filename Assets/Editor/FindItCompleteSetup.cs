@@ -72,13 +72,45 @@ public static class FindItCompleteSetup
         RebuildMall(scene);
 
         var hud = BuildHUD(mainCam, scene);
+        ReparentQuizCanvas(mainCam);
         FixQuizCanvas(AllGOs(scene));
         WireCheckpointsToQuizPanel(AllGOs(scene));
         WireCountdownManager(AllGOs(scene), hud);
+        EnsureBuildSettings();
 
         EditorSceneManager.MarkSceneDirty(scene);
         EditorSceneManager.SaveScene(scene);
         Debug.Log("[FindItRebuild] DONE — FindIt_Main saved.");
+    }
+
+    // Move QuizCanvas out from under a CheckpointZone and head-lock it under Main Camera.
+    static void ReparentQuizCanvas(GameObject mainCam)
+    {
+        var qcGO = GameObject.Find("QuizCanvas");
+        if (qcGO == null) { Debug.LogWarning("[FindItRebuild] QuizCanvas not found for reparenting"); return; }
+        if (mainCam == null) return;
+
+        Undo.SetTransformParent(qcGO.transform, mainCam.transform, "Reparent QuizCanvas → Main Camera");
+        qcGO.transform.localPosition = new Vector3(0, 0, 1f);
+        qcGO.transform.localRotation = Quaternion.identity;
+        qcGO.transform.localScale = new Vector3(0.001f, 0.001f, 0.001f);
+
+        var canvas = qcGO.GetComponent<Canvas>();
+        if (canvas != null) canvas.renderMode = RenderMode.WorldSpace;
+        Debug.Log("[FindItRebuild] QuizCanvas reparented under Main Camera (head-locked, 1 m fwd).");
+    }
+
+    // Build Settings: index 0 = FindIt_Menu, index 1 = FindIt_Main
+    static void EnsureBuildSettings()
+    {
+        var menu = "Assets/SamplesResources/Scenes/FindIt_Menu.unity";
+        var main = "Assets/SamplesResources/Scenes/FindIt_Main.unity";
+        EditorBuildSettings.scenes = new[]
+        {
+            new EditorBuildSettingsScene(menu, true),
+            new EditorBuildSettingsScene(main, true),
+        };
+        Debug.Log("[FindItRebuild] Build Settings: 0=Menu, 1=Main");
     }
 
     // ── STEP 0 : TreasureItem assets ─────────────────────────────────────
@@ -165,7 +197,7 @@ public static class FindItCompleteSetup
 
             var bc = cp.GetComponent<BoxCollider>() ?? cp.AddComponent<BoxCollider>();
             bc.isTrigger = true;
-            bc.size = new Vector3(2f, 3f, 2f);
+            bc.size = new Vector3(3f, 3f, 3f);
             bc.center = Vector3.zero;
 
             if (cp.GetComponent<TreasureCheckpointDetector>() == null)
@@ -342,22 +374,21 @@ public static class FindItCompleteSetup
         return (canvasGO, timerTMP, treasTMP, resultGO, resultTMP);
     }
 
-    // ── STEP F : QuizCanvas to WorldSpace ────────────────────────────────
+    // ── STEP F : QuizCanvas — strip missing scripts; ensure QuizPanel starts inactive
     static void FixQuizCanvas(GameObject[] all)
     {
-        var qc = Find(all, "QuizCanvas");
+        var qc = GameObject.Find("QuizCanvas");
         if (qc == null) { Debug.LogWarning("[FindItRebuild] QuizCanvas not found"); return; }
-        var canvas = qc.GetComponent<Canvas>();
-        if (canvas != null && canvas.renderMode != RenderMode.WorldSpace)
-        {
-            canvas.renderMode = RenderMode.WorldSpace;
-            qc.transform.localPosition = new Vector3(0, 0, 1f);
-            qc.transform.localScale = new Vector3(0.001f, 0.001f, 0.001f);
-            Debug.Log("[FindItRebuild] QuizCanvas → WorldSpace");
-        }
-        // Strip missing scripts on children
+
         foreach (Transform t in qc.GetComponentsInChildren<Transform>(true))
             GameObjectUtility.RemoveMonoBehavioursWithMissingScript(t.gameObject);
+
+        var qp = GameObject.Find("QuizPanel");
+        if (qp != null && qp.activeSelf)
+        {
+            qp.SetActive(false);
+            Debug.Log("[FindItRebuild] QuizPanel set inactive (will be enabled on checkpoint hit).");
+        }
     }
 
     // ── Wire each CheckpointZone's TreasureCheckpointDetector + QDM ──────

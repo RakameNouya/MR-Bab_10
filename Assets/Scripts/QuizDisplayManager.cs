@@ -12,9 +12,13 @@ public class QuizDisplayManager : MonoBehaviour
 
     public void DisplayQuiz()
     {
-        if (currentItem == null) return;
-        if (quizPanel) quizPanel.SetActive(true);
+        Debug.Log("DisplayQuiz called on " + gameObject.name);
+        if (currentItem == null) { Debug.LogError("currentItem is NULL on " + gameObject.name); return; }
+        if (quizPanel == null) { Debug.LogError("quizPanel is NULL on " + gameObject.name); return; }
+
+        quizPanel.SetActive(true);
         if (questionText) questionText.text = currentItem.question;
+
         for (int i = 0; i < answerButtons.Length; i++)
         {
             int idx = i;
@@ -27,6 +31,7 @@ public class QuizDisplayManager : MonoBehaviour
 
     void OnAnswer(int idx)
     {
+        if (currentItem == null) return;
         if (idx == currentItem.correctAnswerIndex)
         {
             Debug.Log("CORRECT!");

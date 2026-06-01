@@ -3,21 +3,32 @@ using UnityEngine;
 public class TreasureCheckpointDetector : MonoBehaviour
 {
     [SerializeField] public GameObject TreasureQuiz;
-    bool triggered = false;
 
     void OnTriggerEnter(Collider other)
     {
-        if (!other.CompareTag("MainCamera")) return;
-        Debug.Log("CHECKPOINT ENTERED: " + gameObject.name);
-        if (TreasureQuiz) TreasureQuiz.SetActive(true);
+        bool isCamera = other.CompareTag("MainCamera") || other.gameObject.name.Contains("Camera");
+        if (!isCamera) return;
+
+        Debug.Log(">>> CHECKPOINT HIT: " + gameObject.name);
+        if (TreasureQuiz != null) TreasureQuiz.SetActive(true);
         CountdownManager.Instance?.StartTimer();
+
         var qdm = GetComponent<QuizDisplayManager>();
-        if (qdm) qdm.DisplayQuiz();
+        if (qdm != null)
+        {
+            Debug.Log(">>> CALLING DisplayQuiz");
+            qdm.DisplayQuiz();
+        }
+        else
+        {
+            Debug.LogWarning(">>> QuizDisplayManager NOT FOUND on " + gameObject.name);
+        }
     }
 
     void OnTriggerExit(Collider other)
     {
-        if (!other.CompareTag("MainCamera")) return;
-        if (TreasureQuiz) TreasureQuiz.SetActive(false);
+        bool isCamera = other.CompareTag("MainCamera") || other.gameObject.name.Contains("Camera");
+        if (!isCamera) return;
+        if (TreasureQuiz != null) TreasureQuiz.SetActive(false);
     }
 }
