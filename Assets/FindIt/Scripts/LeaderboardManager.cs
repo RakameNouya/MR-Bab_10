@@ -5,40 +5,54 @@ using UnityEngine;
 [Serializable]
 public class ScoreEntry
 {
-    public string name;
-    public int treasures;
-    public float time;
+    public string username;
+    public int hartaCollected;
+    public float timeElapsed;
+    public string formattedTime;
+    public string date;
 }
 
 [Serializable]
-class ScoreList
-{
-    public List<ScoreEntry> entries = new List<ScoreEntry>();
-}
+class ScoreList { public List<ScoreEntry> entries = new List<ScoreEntry>(); }
 
 public class LeaderboardManager : MonoBehaviour
 {
     public static LeaderboardManager Instance { get; private set; }
+    const string KEY = "FindIt_LB_v2";
 
     void Awake()
     {
         if (Instance != null) { Destroy(gameObject); return; }
         Instance = this;
+        DontDestroyOnLoad(gameObject);
     }
 
-    public void SaveScore(string name, int treasures, float time)
+    public void SaveScore(string username, int harta, float time)
     {
+        if (string.IsNullOrEmpty(username)) username = "Pemain";
         var list = GetAll();
-        list.Add(new ScoreEntry { name = name, treasures = treasures, time = time });
-        list.Sort((a, b) => a.treasures != b.treasures ? b.treasures - a.treasures : a.time.CompareTo(b.time));
-        if (list.Count > 10) list.RemoveRange(10, list.Count - 10);
-        PlayerPrefs.SetString("Leaderboard", JsonUtility.ToJson(new ScoreList { entries = list }));
+        list.Add(new ScoreEntry
+        {
+            username       = username,
+            hartaCollected = harta,
+            timeElapsed    = time,
+            formattedTime  = FormatTime(time),
+            date           = DateTime.Now.ToString("dd/MM/yy")
+        });
+        list.Sort((a, b) =>
+        {
+            int cmp = b.hartaCollected.CompareTo(a.hartaCollected);
+            return cmp != 0 ? cmp : a.timeElapsed.CompareTo(b.timeElapsed);
+        });
+        if (list.Count > 50) list.RemoveRange(50, list.Count - 50);
+        PlayerPrefs.SetString(KEY, JsonUtility.ToJson(new ScoreList { entries = list }));
         PlayerPrefs.Save();
+        Debug.Log("[LB] Saved: " + username + " " + harta + " " + FormatTime(time));
     }
 
     public List<ScoreEntry> GetAll()
     {
-        string json = PlayerPrefs.GetString("Leaderboard", "");
+        string json = PlayerPrefs.GetString(KEY, "");
         if (string.IsNullOrEmpty(json)) return new List<ScoreEntry>();
         return JsonUtility.FromJson<ScoreList>(json)?.entries ?? new List<ScoreEntry>();
     }

@@ -50,7 +50,8 @@
       "Bash(\"C:/Users/Erlangga Rahmansyah/Bab10/Library/mcp-server/win-x64/unity-mcp-server.exe\" --help)",
       "Bash(tee /tmp/logs.json)",
       "Bash(git commit -m 'REBUILD: clean scripts, proper mall, fixed checkpoint, timer, controls' -m ' *)",
-      "Bash(git commit -m 'Fix checkpoint trigger, timer, scene flow Menu↔Main' -m ' *)"
+      "Bash(git commit -m 'Fix checkpoint trigger, timer, scene flow Menu↔Main' -m ' *)",
+      "Bash(git commit -m 'Complete game rebuild: GameFlowManager, ShopCheckpoint, screen-space UI, camera collider' -m ' *)"
     ]
   },
   "enabledMcpjsonServers": [

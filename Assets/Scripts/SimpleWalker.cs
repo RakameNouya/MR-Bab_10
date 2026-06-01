@@ -8,8 +8,8 @@ public class SimpleWalker : MonoBehaviour
     {
         float h = Input.GetAxis("Horizontal");
         float v = Input.GetAxis("Vertical");
-        Vector3 move = transform.forward * v + transform.right * h;
-        move.y = 0;
-        transform.position += move * speed * Time.deltaTime;
+        Vector3 dir = transform.forward * v + transform.right * h;
+        dir.y = 0;
+        transform.position += dir * speed * Time.deltaTime;
     }
 }
