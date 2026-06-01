@@ -1,60 +1,67 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using TMPro;
-using UnityEngine.UI;
 using System.Collections.Generic;
 
 public class FindItMenuManager : MonoBehaviour
 {
-    [Header("Panels")]
+    [Header("Panels (world-space GameObjects)")]
     public GameObject mainMenuPanel;
     public GameObject tutorialPanel;
     public GameObject creditsPanel;
     public GameObject leaderboardPanel;
     public GameObject notifPanel;
-    public TextMeshProUGUI notifText;
+    public TextMeshPro notifText;
 
     [Header("Username")]
-    public TMP_InputField usernameInput;
-    public TextMeshProUGUI helloText;
+    public Microsoft.MixedReality.Toolkit.Experimental.UI.MRTKTMPInputField usernameInputField;
+    public TextMeshPro helloText;
 
-    [Header("Leaderboard")]
+    [Header("Leaderboard rows parent")]
     public Transform rowContainer;
-    public GameObject rowPrefab;
+    public GameObject rowPrefab3D;
 
     void Start()
     {
         string saved = PlayerPrefs.GetString("PlayerName", "");
         if (!string.IsNullOrEmpty(saved))
         {
-            if (usernameInput) usernameInput.text = saved;
-            if (helloText) helloText.text = "Halo, " + saved + "! 👋";
+            if (helloText) helloText.text = "Halo, " + saved + "!";
         }
         ShowMain();
     }
 
     public void SaveUsername()
     {
-        string name = usernameInput ? usernameInput.text.Trim() : "";
+        string name = usernameInputField != null
+            ? usernameInputField.text.Trim()
+            : "";
         if (string.IsNullOrEmpty(name)) { Notif("Masukkan nama dulu!"); return; }
         PlayerPrefs.SetString("PlayerName", name);
         PlayerPrefs.Save();
-        if (helloText) helloText.text = "Halo, " + name + "! 👋";
-        Notif("✓ Nama disimpan: " + name);
+        if (helloText) helloText.text = "Halo, " + name + "!";
+        Notif("Nama disimpan: " + name);
     }
 
     public void StartGame()
     {
-        string name = PlayerPrefs.GetString("PlayerName", "");
-        if (string.IsNullOrEmpty(name)) { Notif("Masukkan nama kamu dulu!"); return; }
+        if (string.IsNullOrEmpty(PlayerPrefs.GetString("PlayerName", "")))
+        { Notif("Masukkan nama kamu dulu!"); return; }
         SceneManager.LoadScene(1);
     }
 
-    public void ShowMain()        { SetPanels(main: true); }
-    public void ShowTutorial()    { SetPanels(tutorial: true); }
-    public void ShowCredits()     { SetPanels(credits: true); }
-    public void ShowLeaderboard() { SetPanels(lb: true); PopulateLeaderboard(); }
-    public void ExitGame()        { Application.Quit(); }
+    public void ShowMain()      { SetPanels(main: true); }
+    public void ShowTutorial()  { SetPanels(tutorial: true); }
+    public void ShowCredits()   { SetPanels(credits: true); }
+    public void HideAll()       { SetPanels(); }
+
+    public void ShowLeaderboard()
+    {
+        SetPanels(lb: true);
+        PopulateLeaderboard();
+    }
+
+    public void ExitGame() { Application.Quit(); }
 
     void SetPanels(bool main = false, bool tutorial = false, bool credits = false, bool lb = false)
     {
@@ -66,26 +73,20 @@ public class FindItMenuManager : MonoBehaviour
 
     void PopulateLeaderboard()
     {
-        if (rowContainer == null || rowPrefab == null) return;
-        // keep HeaderRow (child 0); destroy the rest
+        if (rowContainer == null || rowPrefab3D == null) return;
         for (int i = rowContainer.childCount - 1; i >= 1; i--)
             Destroy(rowContainer.GetChild(i).gameObject);
-
-        var scores = LeaderboardManager.Instance != null
-            ? LeaderboardManager.Instance.GetAll()
-            : new List<ScoreEntry>();
-
-        for (int i = 0; i < Mathf.Min(scores.Count, 20); i++)
+        var scores = LeaderboardManager.Instance?.GetAll() ?? new List<ScoreEntry>();
+        for (int i = 0; i < Mathf.Min(scores.Count, 15); i++)
         {
-            var row = Instantiate(rowPrefab, rowContainer);
-            row.SetActive(true);
-            var texts = row.GetComponentsInChildren<TextMeshProUGUI>();
-            if (texts.Length >= 4)
+            var row = Instantiate(rowPrefab3D, rowContainer);
+            var labels = row.GetComponentsInChildren<TextMeshPro>();
+            if (labels.Length >= 4)
             {
-                texts[0].text = (i + 1).ToString();
-                texts[1].text = scores[i].username;
-                texts[2].text = scores[i].hartaCollected + "/5";
-                texts[3].text = scores[i].formattedTime;
+                labels[0].text = (i + 1).ToString();
+                labels[1].text = scores[i].username;
+                labels[2].text = scores[i].hartaCollected + "/5";
+                labels[3].text = scores[i].formattedTime;
             }
         }
     }

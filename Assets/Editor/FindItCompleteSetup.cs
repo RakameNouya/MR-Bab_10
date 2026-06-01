@@ -1,33 +1,36 @@
-// Full silent rebuild of FindIt_Menu and FindIt_Main per Bab10 Phase-2/3 spec.
-//   * Strips missing scripts (left over from prior architectures).
-//   * Builds Screen-Space-Overlay canvases for HUD / Quiz / Result / Notif / Hint
-//     and a full menu with username + tutorial + credits + leaderboard.
-//   * Wires GameFlowManager and FindItMenuManager via SerializedObject.
-//   * Creates 5 ShopCheckpoints with 3-question quizzes + floating treasure spheres.
-//   * Sets Build Settings [0]=Menu, [1]=Main.
+// MRTK 3D rebuild of FindIt_Menu and FindIt_Main.
+//   * World-space panels with Quad backplates and TextMeshPro 3D labels.
+//   * PressableButtonHoloLens2 prefab instances wired through Interactable.OnClick.
+//   * SolverHandler + RadialView for head-locked HUD / Quiz / Result / Menu panels.
+//   * Billboard for ad-hoc Notif / Hint panels.
+//   * MRKeyboardInputField_TMP prefab used for username entry (falls back to label).
 
-using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEditor;
 using UnityEditor.SceneManagement;
-using UnityEngine.UI;
 using TMPro;
+
+using Microsoft.MixedReality.Toolkit.UI;
+using Microsoft.MixedReality.Toolkit.Utilities;
+using Microsoft.MixedReality.Toolkit.Utilities.Solvers;
 
 public static class FindItCompleteSetup
 {
     const string MainScenePath = "Assets/SamplesResources/Scenes/FindIt_Main.unity";
     const string MenuScenePath = "Assets/SamplesResources/Scenes/FindIt_Menu.unity";
-    const string RowPrefabPath = "Assets/FindIt/Assets/Prefabs/LeaderboardRowPrefab.prefab";
+    const string Row3DPrefabPath = "Assets/FindIt/Assets/Prefabs/LeaderboardRow3D.prefab";
 
-    static readonly Color BG_DARK = new Color(0.05f, 0.07f, 0.15f, 0.97f);
-    static readonly Color BG_DARKER = new Color(0.04f, 0.05f, 0.10f, 0.97f);
-    static readonly Color BTN_BLUE = new Color(0.14f, 0.38f, 0.72f);
-    static readonly Color BTN_BLUE_DK = new Color(0.10f, 0.28f, 0.58f);
-    static readonly Color BTN_GREEN = new Color(0.18f, 0.58f, 0.18f);
-    static readonly Color BTN_GOLD = new Color(0.65f, 0.50f, 0.05f);
-    static readonly Color BTN_RED = new Color(0.55f, 0.10f, 0.10f);
-    static readonly Color BTN_RED_BRIGHT = new Color(0.7f, 0.1f, 0.1f);
+    const string BtnPrefabPath = "Assets/MRTK/SDK/Features/UX/Interactable/Prefabs/PressableButtonHoloLens2.prefab";
+    const string InputFieldPrefabPath = "Assets/MRTK/SDK/Experimental/MixedRealityKeyboard/Prefabs/MRKeyboardInputField_TMP.prefab";
+
+    static readonly Color BG_DARK   = new Color(0.05f, 0.07f, 0.15f, 0.95f);
+    static readonly Color BG_DARKER = new Color(0.04f, 0.05f, 0.10f, 0.96f);
+    static readonly Color BG_GREEN  = new Color(0.03f, 0.12f, 0.03f, 0.97f);
+    static readonly Color BG_QUIZ   = new Color(0.04f, 0.06f, 0.18f, 0.97f);
+    static readonly Color BG_HUD    = new Color(0.03f, 0.04f, 0.10f, 0.88f);
+    static readonly Color BG_NOTIF  = new Color(0.08f, 0.08f, 0.08f, 0.92f);
+    static readonly Color BG_HINT   = new Color(0.05f, 0.10f, 0.20f, 0.94f);
 
     struct ShopDef
     {
@@ -85,107 +88,72 @@ public static class FindItCompleteSetup
         },
     };
 
-    [MenuItem("FindIt/Complete FindIt Setup (Full)")]
+    [MenuItem("FindIt/Complete FindIt Setup (MRTK 3D)")]
     public static void RunAll()
     {
-        if (!EditorUtility.DisplayDialog("Rebuild FindIt",
-            "Rebuilds FindIt_Menu and FindIt_Main from scratch. Continue?",
+        if (!EditorUtility.DisplayDialog("Rebuild FindIt (MRTK 3D)",
+            "Rebuilds FindIt_Menu and FindIt_Main with MRTK 3D world-space UI. Continue?",
             "Yes", "Cancel")) return;
         if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
         RunAllSilent();
-        EditorUtility.DisplayDialog("Done", "FindIt rebuild finished.", "OK");
+        EditorUtility.DisplayDialog("Done", "FindIt MRTK rebuild finished.", "OK");
     }
 
     public static void RunAllSilent()
     {
         EnsureTag("MainCamera");
         EnsureTag("Treasure");
+        EnsureTag("Player");
 
-        BuildLeaderboardRowPrefab();
+        EnsureFolder("Assets/FindIt/Assets");
+        EnsureFolder("Assets/FindIt/Assets/Prefabs");
+
+        BuildLeaderboardRow3DPrefab();
         BuildMenuScene();
         BuildMainScene();
         EnsureBuildSettings();
 
-        Debug.Log("[FindItRebuild] ALL DONE.");
+        Debug.Log("[FindItMRTK] ALL DONE.");
     }
 
-    // ── Build Leaderboard Row prefab ────────────────────────────────────
-    static void BuildLeaderboardRowPrefab()
+    // ── 3D Leaderboard Row Prefab ───────────────────────────────────────
+    static void BuildLeaderboardRow3DPrefab()
     {
-        EnsureFolder("Assets/FindIt/Assets");
-        EnsureFolder("Assets/FindIt/Assets/Prefabs");
+        var row = new GameObject("LeaderboardRow3D");
+        AddTMP3D(row.transform, "RankCol",   new Vector3(-0.13f, 0, 0), 5.5f, Color.white,                "1");
+        AddTMP3D(row.transform, "NameCol",   new Vector3(-0.05f, 0, 0), 5.5f, Color.white,                "Pemain", TextAlignmentOptions.MidlineLeft);
+        AddTMP3D(row.transform, "HartaCol",  new Vector3(0.06f,  0, 0), 5.5f, new Color(1f, 0.85f, 0.2f), "5/5");
+        AddTMP3D(row.transform, "WaktuCol",  new Vector3(0.13f,  0, 0), 5.5f, new Color(0.6f, 0.85f, 1f), "0:00");
+        foreach (var tmp in row.GetComponentsInChildren<TextMeshPro>())
+            tmp.transform.localScale = new Vector3(0.0018f, 0.0018f, 0.0018f);
 
-        var row = new GameObject("LeaderboardRow", typeof(RectTransform));
-        var rt = (RectTransform)row.transform;
-        rt.sizeDelta = new Vector2(740, 38);
-        var hlg = row.AddComponent<HorizontalLayoutGroup>();
-        hlg.childAlignment = TextAnchor.MiddleLeft;
-        hlg.childForceExpandWidth = false;
-        hlg.childForceExpandHeight = true;
-        hlg.childControlWidth = true;
-        hlg.childControlHeight = true;
-        hlg.padding = new RectOffset(8, 8, 2, 2);
-        hlg.spacing = 4;
-        var bg = row.AddComponent<Image>();
-        bg.color = new Color(0.06f, 0.08f, 0.14f, 0.9f);
-
-        AddRowCol(row, "RankCol", 90, "1");
-        AddRowCol(row, "NameCol", 230, "Pemain");
-        AddRowCol(row, "HartaCol", 130, "5/5");
-        AddRowCol(row, "WaktuCol", 170, "0:00");
-
-        PrefabUtility.SaveAsPrefabAsset(row, RowPrefabPath);
+        PrefabUtility.SaveAsPrefabAsset(row, Row3DPrefabPath);
         Object.DestroyImmediate(row);
-        Debug.Log("[FindItRebuild] LeaderboardRowPrefab created.");
-    }
-
-    static void AddRowCol(GameObject parent, string name, float w, string defaultText)
-    {
-        var go = new GameObject(name, typeof(RectTransform));
-        go.transform.SetParent(parent.transform, false);
-        var le = go.AddComponent<LayoutElement>();
-        le.preferredWidth = w;
-        var tmp = go.AddComponent<TextMeshProUGUI>();
-        tmp.text = defaultText; tmp.color = Color.white;
-        tmp.fontSize = 16; tmp.alignment = TextAlignmentOptions.MidlineLeft;
+        Debug.Log("[FindItMRTK] LeaderboardRow3D prefab saved.");
     }
 
     // ── Menu scene ──────────────────────────────────────────────────────
     static void BuildMenuScene()
     {
-        UnityEngine.SceneManagement.Scene scene;
-        string fullPath = System.IO.Path.Combine(
-            System.IO.Path.GetDirectoryName(Application.dataPath), MenuScenePath);
-        if (System.IO.File.Exists(fullPath))
-            scene = EditorSceneManager.OpenScene(MenuScenePath, OpenSceneMode.Single);
-        else
-        {
-            scene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
-            EditorSceneManager.SaveScene(scene, MenuScenePath);
-            scene = EditorSceneManager.OpenScene(MenuScenePath, OpenSceneMode.Single);
-        }
-
+        var scene = EditorSceneManager.OpenScene(MenuScenePath, OpenSceneMode.Single);
         StripMissingScriptsAllRoots(scene);
 
-        // Remove legacy menu objects
+        // Wipe legacy UI/menu structure
         foreach (var r in scene.GetRootGameObjects().ToList())
-            if (r.name == "MenuCanvas" || r.name == "MenuManager" || r.name == "MixedRealityToolkit"
-                || r.name == "MixedRealityPlayspace")
-                Undo.DestroyObjectImmediate(r);
-
-        // Ensure EventSystem
-        if (scene.GetRootGameObjects().FirstOrDefault(g => g.name == "EventSystem") == null)
         {
-            var es = new GameObject("EventSystem",
-                typeof(UnityEngine.EventSystems.EventSystem),
-                typeof(UnityEngine.EventSystems.StandaloneInputModule));
-            Undo.RegisterCreatedObjectUndo(es, "EventSystem");
+            if (r.name == "MenuCanvas" || r.name == "MenuManager"
+                || r.name == "MixedRealityToolkit" || r.name == "MixedRealityPlayspace"
+                || r.name == "EventSystem" || r.name == "MainMenuPanel"
+                || r.name == "TutorialPanel" || r.name == "CreditsPanel"
+                || r.name == "LeaderboardPanel" || r.name == "NotifPanel")
+                Undo.DestroyObjectImmediate(r);
         }
 
-        // Ensure a basic camera
-        if (scene.GetRootGameObjects().FirstOrDefault(g => g.GetComponent<Camera>() != null) == null)
+        // Camera ─ ensure a basic one exists
+        var camGO = scene.GetRootGameObjects().FirstOrDefault(g => g.GetComponent<Camera>() != null);
+        if (camGO == null)
         {
-            var camGO = new GameObject("Main Camera");
+            camGO = new GameObject("Main Camera");
             camGO.tag = "MainCamera";
             var cam = camGO.AddComponent<Camera>();
             cam.clearFlags = CameraClearFlags.SolidColor;
@@ -193,195 +161,169 @@ public static class FindItCompleteSetup
             camGO.AddComponent<AudioListener>();
         }
 
-        // MenuManager
+        // MenuManager (managers)
         var menuMgrGO = new GameObject("MenuManager");
         Undo.RegisterCreatedObjectUndo(menuMgrGO, "MenuManager");
         var menuMgr = menuMgrGO.AddComponent<FindItMenuManager>();
-        var leaderboard = menuMgrGO.AddComponent<LeaderboardManager>();
+        menuMgrGO.AddComponent<LeaderboardManager>();
 
-        // MenuCanvas (Screen-Space Overlay)
-        var canvas = NewCanvas("MenuCanvas", 0);
+        // Position panels 1.2m in front of camera
+        Vector3 panelPos = camGO.transform.position + camGO.transform.forward * 1.2f;
+        Quaternion panelRot = Quaternion.LookRotation(camGO.transform.position - panelPos, Vector3.up);
 
         // ── MainMenuPanel ─────────────────────────────────────────────
-        var main = NewUIStretch(canvas, "MainMenuPanel");
-        main.AddComponent<Image>().color = BG_DARK;
+        var main = new GameObject("MainMenuPanel");
+        main.transform.position = panelPos;
+        main.transform.rotation = panelRot;
 
-        MakeLabel(main, "Title", 0, 195, 650, 65,
-            "FindIt! Mall Adventure", 46, Color.white, FontStyles.Bold);
-        MakeLabel(main, "Subtitle", 0, 145, 600, 38,
-            "Mixed Reality Treasure Hunt | Galaxy Mall 3", 20, new Color(0.6f, 0.8f, 1f), FontStyles.Normal);
-        MakeLabel(main, "Footer", 0, -345, 500, 28,
-            "v1.0 | PENS 2026 | Kelompok 3", 13, new Color(0.45f, 0.55f, 0.7f), FontStyles.Normal);
+        MRTKPanelBuilder.CreateBackplate("Backplate", main.transform,
+            new Vector3(0, 0, 0.01f), new Vector2(0.55f, 0.75f), BG_DARK);
 
-        // Username row
-        var inputGO = NewUI(main, "UsernameInput", -85, 90, 360, 52);
-        var inputBg = inputGO.AddComponent<Image>();
-        inputBg.color = new Color(0.12f, 0.14f, 0.22f);
-        var input = inputGO.AddComponent<TMP_InputField>();
-        input.targetGraphic = inputBg;
-        var txtGO = NewUIAnchored(inputGO, "Text", new Vector2(0, 0), new Vector2(1, 1), Vector2.zero, Vector2.zero);
-        var txt = txtGO.AddComponent<TextMeshProUGUI>();
-        txt.color = Color.white; txt.fontSize = 20;
-        txt.alignment = TextAlignmentOptions.MidlineLeft;
-        txt.margin = new Vector4(14, 0, 14, 0);
-        input.textComponent = txt;
-        var phGO = NewUIAnchored(inputGO, "Placeholder", new Vector2(0, 0), new Vector2(1, 1), Vector2.zero, Vector2.zero);
-        var ph = phGO.AddComponent<TextMeshProUGUI>();
-        ph.text = "Masukkan nama kamu..."; ph.color = new Color(0.6f, 0.6f, 0.65f);
-        ph.fontSize = 20; ph.alignment = TextAlignmentOptions.MidlineLeft;
-        ph.fontStyle = FontStyles.Italic; ph.margin = new Vector4(14, 0, 14, 0);
-        input.placeholder = ph;
+        AddTMP3D(main.transform, "TitleText",    new Vector3(0,  0.28f, 0), 10f, Color.white,                  "FindIt! Mall Adventure", TextAlignmentOptions.Center, FontStyles.Bold);
+        AddTMP3D(main.transform, "SubtitleText", new Vector3(0,  0.22f, 0),  8f, new Color(0.6f, 0.8f, 1f),    "Mixed Reality Treasure Hunt");
+        var helloTMP = AddTMP3D(main.transform, "HelloText", new Vector3(0,  0.16f, 0), 7f, new Color(0.55f, 0.95f, 0.55f), "");
+        helloTMP.transform.localScale = new Vector3(0.0018f, 0.0018f, 0.0018f);
 
-        var saveBtn = MakeButton(main, "SaveBtn", 130, 90, 150, 52, "Simpan", BTN_GREEN);
-        WireClick(saveBtn, menuMgr, "SaveUsername");
+        // Username input (MRKeyboardInputField_TMP) — falls back to TMP label
+        var inputPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(InputFieldPrefabPath);
+        Microsoft.MixedReality.Toolkit.Experimental.UI.MRTKTMPInputField inputField = null;
+        if (inputPrefab != null)
+        {
+            var instGO = (GameObject)PrefabUtility.InstantiatePrefab(inputPrefab, main.transform);
+            instGO.name = "UsernameInput";
+            instGO.transform.localPosition = new Vector3(-0.08f, 0.09f, 0f);
+            instGO.transform.localRotation = Quaternion.identity;
+            instGO.transform.localScale = new Vector3(0.0008f, 0.0008f, 0.0008f);
+            inputField = instGO.GetComponentInChildren<Microsoft.MixedReality.Toolkit.Experimental.UI.MRTKTMPInputField>();
+        }
+        else
+        {
+            Debug.LogWarning("[FindItMRTK] MRKeyboardInputField_TMP prefab not found — username entry via external keyboard");
+            AddTMP3D(main.transform, "UsernameDisplay", new Vector3(-0.08f, 0.09f, 0), 7f, Color.white, "[Enter Name]");
+        }
 
-        MakeLabel(main, "HelloText", 0, 42, 550, 34, "", 18, new Color(0.55f, 0.95f, 0.55f), FontStyles.Normal);
+        var btnPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(BtnPrefabPath);
 
-        var startBtn   = MakeButton(main, "StartBtn",    0, -15,  340, 58, "Mulai Game", BTN_BLUE);
-        var tutBtn     = MakeButton(main, "TutorialBtn", 0, -83,  340, 58, "Tutorial",   BTN_BLUE_DK);
-        var credBtn    = MakeButton(main, "CreditsBtn",  0, -151, 340, 58, "Credits",    BTN_BLUE_DK);
-        var lbBtn      = MakeButton(main, "LBBtn",       0, -219, 340, 58, "Leaderboard", BTN_GOLD);
-        var exitBtn    = MakeButton(main, "ExitBtn",     0, -287, 340, 58, "Keluar",     BTN_RED);
-        WireClick(startBtn, menuMgr, "StartGame");
-        WireClick(tutBtn,   menuMgr, "ShowTutorial");
-        WireClick(credBtn,  menuMgr, "ShowCredits");
-        WireClick(lbBtn,    menuMgr, "ShowLeaderboard");
-        WireClick(exitBtn,  menuMgr, "ExitGame");
+        var saveBtn  = InstantiateBtn(btnPrefab, main.transform, "SaveNameBtn", new Vector3(0.14f,   0.09f, 0), "Simpan ✓");
+        var startBtn = InstantiateBtn(btnPrefab, main.transform, "StartBtn",    new Vector3(0,      -0.01f, 0), "▶ Mulai");
+        var tutBtn   = InstantiateBtn(btnPrefab, main.transform, "TutorialBtn", new Vector3(0,     -0.075f, 0), "? Tutorial");
+        var credBtn  = InstantiateBtn(btnPrefab, main.transform, "CreditsBtn",  new Vector3(0,     -0.140f, 0), "★ Credits");
+        var lbBtn    = InstantiateBtn(btnPrefab, main.transform, "LBBtn",       new Vector3(0,     -0.205f, 0), "🏆 Board");
+        var exitBtn  = InstantiateBtn(btnPrefab, main.transform, "ExitBtn",     new Vector3(0,     -0.270f, 0), "✕ Keluar");
+
+        WireInteractable(saveBtn,  menuMgr, "SaveUsername");
+        WireInteractable(startBtn, menuMgr, "StartGame");
+        WireInteractable(tutBtn,   menuMgr, "ShowTutorial");
+        WireInteractable(credBtn,  menuMgr, "ShowCredits");
+        WireInteractable(lbBtn,    menuMgr, "ShowLeaderboard");
+        WireInteractable(exitBtn,  menuMgr, "ExitGame");
+
+        AddRadialView(main, 0.8f, 1.5f, 30f);
 
         // ── TutorialPanel ─────────────────────────────────────────────
-        var tut = NewUIStretch(canvas, "TutorialPanel");
-        tut.AddComponent<Image>().color = BG_DARKER;
-        MakeLabel(tut, "Title", 0, 215, 700, 50, "CARA BERMAIN", 34, Color.white, FontStyles.Bold);
-        MakeLabel(tut, "Body", 0, -10, 720, 360,
-            "TUJUAN\n" +
-            "Kumpulkan 5 harta karun dari 5 toko di Galaxy Mall!\n\n" +
-            "BERGERAK\n" +
-            "- HoloLens: jalan fisik di area mall\n" +
-            "- PC Testing: WASD / Arrow Keys\n\n" +
-            "CHECKPOINT\n" +
-            "- Masuk zona di depan setiap toko\n" +
-            "- Quiz 3 pertanyaan akan muncul otomatis\n" +
-            "- Minimal 2 dari 3 jawaban harus benar\n\n" +
-            "KLAIM HARTA\n" +
-            "- Jika lolos quiz, harta karun muncul berputar\n" +
-            "- Ucapkan \"Claim\" ATAU tekan C ATAU klik harta\n" +
-            "- Skor otomatis terupdate\n\n" +
-            "NAVIGASI\n" +
-            "- Setelah klaim harta, petunjuk toko berikutnya muncul\n" +
-            "- Ikuti petunjuknya untuk menemukan toko selanjutnya\n\n" +
-            "MENANG\n" +
-            "- Kumpulkan semua 5 harta = Mission Complete!\n" +
-            "- Waktu dicatat ke Leaderboard",
-            19, Color.white, FontStyles.Normal, TextAlignmentOptions.TopLeft);
-        var tutClose = MakeButton(tut, "CloseBtn", 0, -250, 220, 52, "Tutup", BTN_RED);
-        WireClick(tutClose, menuMgr, "ShowMain");
+        var tut = new GameObject("TutorialPanel");
+        tut.transform.position = panelPos;
+        tut.transform.rotation = panelRot;
+        MRTKPanelBuilder.CreateBackplate("Backplate", tut.transform,
+            new Vector3(0, 0, 0.01f), new Vector2(0.65f, 0.80f), BG_DARKER);
+        AddTMP3D(tut.transform, "TutTitle", new Vector3(0, 0.33f, 0), 9f, Color.white, "CARA BERMAIN", TextAlignmentOptions.Center, FontStyles.Bold);
+        var tutBody = AddTMP3D(tut.transform, "TutBody", new Vector3(0, 0, 0), 7f, Color.white,
+            "TUJUAN: Kumpulkan 5 harta karun dari 5 toko!\n\n" +
+            "BERGERAK\nHoloLens: jalan fisik di area mall\nPC Testing: WASD / Arrow Keys\n\n" +
+            "CHECKPOINT\nMasuk zona depan toko → quiz 3 pertanyaan\nMinimal 2/3 benar untuk unlock harta\n\n" +
+            "KLAIM HARTA\nHarta muncul berputar setelah quiz benar\nUcapkan Claim, tekan C, atau air tap harta\n\n" +
+            "NAVIGASI\nSetelah klaim → petunjuk toko berikutnya muncul\n\n" +
+            "MENANG: Kumpulkan 5 harta = Mission Complete!",
+            TextAlignmentOptions.TopLeft);
+        tutBody.transform.localScale = new Vector3(0.0015f, 0.0015f, 0.0015f);
+        tutBody.rectTransform.sizeDelta = new Vector2(380, 380);
+        var tutClose = InstantiateBtn(btnPrefab, tut.transform, "CloseBtn", new Vector3(0, -0.35f, 0), "✕ Tutup");
+        WireInteractable(tutClose, menuMgr, "ShowMain");
+        AddRadialView(tut, 0.8f, 1.5f, 30f);
         tut.SetActive(false);
 
         // ── CreditsPanel ──────────────────────────────────────────────
-        var cred = NewUIStretch(canvas, "CreditsPanel");
-        cred.AddComponent<Image>().color = BG_DARKER;
-        MakeLabel(cred, "Title", 0, 200, 700, 50, "TIM PENGEMBANG", 34, Color.white, FontStyles.Bold);
-        MakeLabel(cred, "ClassLine", 0, 158, 700, 30,
-            "Kelompok 3 | Kelas A | TRMA24 | PENS 2026", 17, new Color(0.6f, 0.8f, 1f), FontStyles.Normal);
-        MakeLabel(cred, "Body", 0, -10, 650, 300,
-            "Erlangga Rahmansyah  -  Lead Dev / MR / Multiplayer\n" +
-            "Ehren Gelen Stanislaw  -  Firebase / Admin Panel\n" +
-            "Nathan Yudhistira Siahaan  -  Spatial UI / Survey\n" +
-            "Ignatius Calvin Anggoro  -  Firebase / Admin Panel\n" +
-            "Angelica Tamara Sitorus  -  Survey / Dokumentasi\n" +
-            "Arya Bagus Permono  -  Multiplayer / Coding\n" +
-            "Maurena Isaura Azzahra  -  Dokumentasi\n" +
-            "Hana Azka Tsabitah  -  Environment 3D\n" +
-            "Muhammad Rivanza Ridwan  -  Multiplayer\n" +
-            "Putri Syntia Narlita Rachmadani  -  Dokumentasi",
-            18, Color.white, FontStyles.Normal, TextAlignmentOptions.Center);
-        MakeLabel(cred, "Lecturer", 0, -155, 700, 30,
-            "Dosen Pembimbing: Sritrusta Sukaridhoto ST, Ph.D",
-            16, new Color(0.6f, 0.9f, 0.6f), FontStyles.Normal);
-        var credClose = MakeButton(cred, "CloseBtn", 0, -205, 220, 52, "Tutup", BTN_RED);
-        WireClick(credClose, menuMgr, "ShowMain");
+        var cred = new GameObject("CreditsPanel");
+        cred.transform.position = panelPos;
+        cred.transform.rotation = panelRot;
+        MRTKPanelBuilder.CreateBackplate("Backplate", cred.transform,
+            new Vector3(0, 0, 0.01f), new Vector2(0.60f, 0.70f), BG_DARKER);
+        AddTMP3D(cred.transform, "CredTitle", new Vector3(0, 0.28f, 0), 9f, Color.white, "TIM PENGEMBANG", TextAlignmentOptions.Center, FontStyles.Bold);
+        var credBody = AddTMP3D(cred.transform, "CredBody", new Vector3(0, -0.02f, 0), 6f, Color.white,
+            "Erlangga Rahmansyah - Lead Dev\n" +
+            "Ehren Gelen Stanislaw - Firebase\n" +
+            "Nathan Yudhistira Siahaan - UI/Survey\n" +
+            "Ignatius Calvin Anggoro - Firebase\n" +
+            "Angelica Tamara Sitorus - Dokumentasi\n" +
+            "Arya Bagus Permono - Multiplayer\n" +
+            "Maurena Isaura Azzahra - Dokumentasi\n" +
+            "Hana Azka Tsabitah - Environment 3D\n" +
+            "Muhammad Rivanza Ridwan - Multiplayer\n" +
+            "Putri Syntia Narlita Rachmadani - Dokumentasi\n\n" +
+            "Dosen: Sritrusta Sukaridhoto ST, Ph.D");
+        credBody.transform.localScale = new Vector3(0.0014f, 0.0014f, 0.0014f);
+        credBody.rectTransform.sizeDelta = new Vector2(380, 360);
+        var credClose = InstantiateBtn(btnPrefab, cred.transform, "CloseBtn", new Vector3(0, -0.32f, 0), "✕ Tutup");
+        WireInteractable(credClose, menuMgr, "ShowMain");
+        AddRadialView(cred, 0.8f, 1.5f, 30f);
         cred.SetActive(false);
 
         // ── LeaderboardPanel ──────────────────────────────────────────
-        var lb = NewUIStretch(canvas, "LeaderboardPanel");
-        lb.AddComponent<Image>().color = BG_DARKER;
-        MakeLabel(lb, "Title", 0, 225, 700, 50, "LEADERBOARD",
-            36, new Color(1f, 0.85f, 0.2f), FontStyles.Bold);
+        var lb = new GameObject("LeaderboardPanel");
+        lb.transform.position = panelPos;
+        lb.transform.rotation = panelRot;
+        MRTKPanelBuilder.CreateBackplate("Backplate", lb.transform,
+            new Vector3(0, 0, 0.01f), new Vector2(0.70f, 0.80f), BG_DARKER);
+        AddTMP3D(lb.transform, "LBTitle", new Vector3(0, 0.32f, 0), 9f, new Color(1f, 0.85f, 0.2f), "LEADERBOARD", TextAlignmentOptions.Center, FontStyles.Bold);
 
-        // Header row + container
-        var rowContainerGO = NewUI(lb, "RowContainer", 0, -5, 740, 360);
-        var vlg = rowContainerGO.AddComponent<VerticalLayoutGroup>();
-        vlg.childAlignment = TextAnchor.UpperCenter;
-        vlg.childForceExpandWidth = false;
-        vlg.childForceExpandHeight = false;
-        vlg.childControlWidth = true;
-        vlg.childControlHeight = false;
-        vlg.spacing = 2;
-        vlg.padding = new RectOffset(0, 0, 0, 0);
+        var header = new GameObject("HeaderRow");
+        header.transform.SetParent(lb.transform, false);
+        header.transform.localPosition = new Vector3(0, 0.24f, 0);
+        AddTMP3D(header.transform, "Rank",    new Vector3(-0.13f, 0, 0), 6f, Color.white, "RANK",     TextAlignmentOptions.Center,    FontStyles.Bold);
+        AddTMP3D(header.transform, "User",    new Vector3(-0.05f, 0, 0), 6f, Color.white, "USERNAME", TextAlignmentOptions.MidlineLeft, FontStyles.Bold);
+        AddTMP3D(header.transform, "Harta",   new Vector3(0.06f,  0, 0), 6f, Color.white, "HARTA",    TextAlignmentOptions.Center,    FontStyles.Bold);
+        AddTMP3D(header.transform, "Waktu",   new Vector3(0.13f,  0, 0), 6f, Color.white, "WAKTU",    TextAlignmentOptions.Center,    FontStyles.Bold);
+        foreach (var tmp in header.GetComponentsInChildren<TextMeshPro>())
+            tmp.transform.localScale = new Vector3(0.0018f, 0.0018f, 0.0018f);
 
-        var header = new GameObject("HeaderRow", typeof(RectTransform));
-        header.transform.SetParent(rowContainerGO.transform, false);
-        var hRT = (RectTransform)header.transform;
-        hRT.sizeDelta = new Vector2(740, 42);
-        var hHlg = header.AddComponent<HorizontalLayoutGroup>();
-        hHlg.childForceExpandWidth = false;
-        hHlg.childForceExpandHeight = true;
-        hHlg.childControlWidth = true;
-        hHlg.childControlHeight = true;
-        hHlg.padding = new RectOffset(8, 8, 2, 2);
-        hHlg.spacing = 4;
-        header.AddComponent<Image>().color = new Color(0.08f, 0.1f, 0.18f);
-        AddHeaderCol(header, "RANK", 90);
-        AddHeaderCol(header, "USERNAME", 230);
-        AddHeaderCol(header, "HARTA", 130);
-        AddHeaderCol(header, "WAKTU", 170);
+        var rowContainer = new GameObject("RowContainer");
+        rowContainer.transform.SetParent(lb.transform, false);
+        rowContainer.transform.localPosition = new Vector3(0, 0.18f, 0);
 
-        var lbClose = MakeButton(lb, "CloseBtn", 0, -230, 220, 52, "Tutup", BTN_RED);
-        WireClick(lbClose, menuMgr, "ShowMain");
+        var lbClose = InstantiateBtn(btnPrefab, lb.transform, "CloseBtn", new Vector3(0, -0.35f, 0), "✕ Tutup");
+        WireInteractable(lbClose, menuMgr, "ShowMain");
+        AddRadialView(lb, 0.8f, 1.5f, 30f);
         lb.SetActive(false);
 
-        // ── NotifPanel ────────────────────────────────────────────────
-        var notif = NewUIAnchored(canvas, "NotifPanel",
-            new Vector2(0.5f, 0), new Vector2(0.5f, 0), new Vector2(0, 80), new Vector2(520, 68));
-        var notifBg = notif.AddComponent<Image>();
-        notifBg.color = new Color(0.1f, 0.1f, 0.1f, 0.9f);
-        var notifTxtGO = NewUIAnchored(notif, "NotifText",
-            new Vector2(0, 0), new Vector2(1, 1), Vector2.zero, Vector2.zero);
-        var notifTxt = notifTxtGO.AddComponent<TextMeshProUGUI>();
-        notifTxt.color = Color.white; notifTxt.fontSize = 20; notifTxt.fontStyle = FontStyles.Bold;
-        notifTxt.alignment = TextAlignmentOptions.Center;
+        // ── NotifPanel (billboard) ───────────────────────────────────
+        var notif = new GameObject("NotifPanel");
+        notif.transform.position = panelPos + new Vector3(0, -0.42f, 0);
+        notif.transform.rotation = panelRot;
+        var notifBg = MRTKPanelBuilder.CreateBackplate("Backplate", notif.transform,
+            new Vector3(0, 0, 0.01f), new Vector2(0.50f, 0.08f), BG_NOTIF);
+        var notifTMP = AddTMP3D(notif.transform, "NotifText", new Vector3(0, 0, 0), 6f, Color.white, "", TextAlignmentOptions.Center, FontStyles.Bold);
+        notif.AddComponent<Billboard>();
         notif.SetActive(false);
 
         // Wire FindItMenuManager fields
-        var rowPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(RowPrefabPath);
+        var rowPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(Row3DPrefabPath);
         var mso = new SerializedObject(menuMgr);
-        mso.FindProperty("mainMenuPanel").objectReferenceValue   = main;
-        mso.FindProperty("tutorialPanel").objectReferenceValue   = tut;
-        mso.FindProperty("creditsPanel").objectReferenceValue    = cred;
+        mso.FindProperty("mainMenuPanel").objectReferenceValue    = main;
+        mso.FindProperty("tutorialPanel").objectReferenceValue    = tut;
+        mso.FindProperty("creditsPanel").objectReferenceValue     = cred;
         mso.FindProperty("leaderboardPanel").objectReferenceValue = lb;
-        mso.FindProperty("notifPanel").objectReferenceValue      = notif;
-        mso.FindProperty("notifText").objectReferenceValue       = notifTxt;
-        mso.FindProperty("usernameInput").objectReferenceValue   = input;
-        mso.FindProperty("helloText").objectReferenceValue       = FindChildTMP(main, "HelloText");
-        mso.FindProperty("rowContainer").objectReferenceValue    = rowContainerGO.transform;
-        mso.FindProperty("rowPrefab").objectReferenceValue       = rowPrefab;
+        mso.FindProperty("notifPanel").objectReferenceValue       = notif;
+        mso.FindProperty("notifText").objectReferenceValue        = notifTMP;
+        mso.FindProperty("helloText").objectReferenceValue        = helloTMP;
+        mso.FindProperty("rowContainer").objectReferenceValue     = rowContainer.transform;
+        mso.FindProperty("rowPrefab3D").objectReferenceValue      = rowPrefab;
+        if (inputField != null)
+            mso.FindProperty("usernameInputField").objectReferenceValue = inputField;
         mso.ApplyModifiedProperties();
 
         EditorSceneManager.MarkSceneDirty(scene);
         EditorSceneManager.SaveScene(scene);
-        Debug.Log("[FindItRebuild] FindIt_Menu rebuilt and saved.");
-    }
-
-    static void AddHeaderCol(GameObject parent, string text, float w)
-    {
-        var go = new GameObject(text + "Col", typeof(RectTransform));
-        go.transform.SetParent(parent.transform, false);
-        var le = go.AddComponent<LayoutElement>();
-        le.preferredWidth = w;
-        var tmp = go.AddComponent<TextMeshProUGUI>();
-        tmp.text = text; tmp.color = Color.white;
-        tmp.fontSize = 17; tmp.fontStyle = FontStyles.Bold;
-        tmp.alignment = TextAlignmentOptions.MidlineLeft;
+        Debug.Log("[FindItMRTK] FindIt_Menu rebuilt and saved.");
     }
 
     // ── Main scene ──────────────────────────────────────────────────────
@@ -390,9 +332,8 @@ public static class FindItCompleteSetup
         var scene = EditorSceneManager.OpenScene(MainScenePath, OpenSceneMode.Single);
         StripMissingScriptsAllRoots(scene);
 
-        // Main Camera
         var cam = FindInScene(scene, "Main Camera");
-        if (cam == null) { Debug.LogError("[FindItRebuild] Main Camera not found in FindIt_Main"); return; }
+        if (cam == null) { Debug.LogError("[FindItMRTK] Main Camera not found in FindIt_Main"); return; }
         if (cam.tag != "MainCamera") cam.tag = "MainCamera";
 
         var sphere = cam.GetComponent<SphereCollider>() ?? cam.AddComponent<SphereCollider>();
@@ -402,20 +343,21 @@ public static class FindItCompleteSetup
         rb.isKinematic = true; rb.useGravity = false;
         rb.collisionDetectionMode = CollisionDetectionMode.Discrete;
 
-        if (cam.GetComponent<SimpleWalker>() == null) cam.AddComponent<SimpleWalker>();
+        if (cam.GetComponent<SimpleWalker>() == null)      cam.AddComponent<SimpleWalker>();
+        if (cam.GetComponent<VoiceClaimHandler>() == null) cam.AddComponent<VoiceClaimHandler>();
         var c = cam.GetComponent<Camera>();
         if (c != null) c.clearFlags = CameraClearFlags.Skybox;
 
-        // Delete legacy
+        // Delete legacy UGUI canvases
         foreach (var name in new[] {
-            "HUDCanvas", "QuizCanvas", "ResultCanvas", "NotifCanvas", "HintCanvas", "HUD",
-            "GameFlowManager", "GameManager"
+            "HUDCanvas", "QuizCanvas", "ResultCanvas", "NotifCanvas", "HintCanvas",
+            "HUDPanel", "QuizPanel", "ResultPanel", "NotifPanel", "HintPanel",
+            "HUD", "GameFlowManager", "GameManager"
         })
         {
             var go = GameObject.Find(name);
             while (go != null) { Undo.DestroyObjectImmediate(go); go = GameObject.Find(name); }
         }
-        // Delete all CheckpointZone* and ShopCheckpoint*
         foreach (var r in scene.GetRootGameObjects().ToList())
         {
             if (r.name.StartsWith("CheckpointZone") || r.name.StartsWith("ShopCheckpoint"))
@@ -428,200 +370,148 @@ public static class FindItCompleteSetup
         var flow = gmGO.AddComponent<GameFlowManager>();
         var mp   = gmGO.AddComponent<MultiplayerManager>();
 
-        // HUDCanvas
-        var hud = NewCanvas("HUDCanvas", 0);
+        // Playspace anchor (RadialView panels parent here so they stay world-space but head-tracked)
+        var playspace = scene.GetRootGameObjects().FirstOrDefault(g => g.name == "MixedRealityPlayspace");
+        Transform panelParent = playspace != null ? playspace.transform : null;
 
-        var timer = MakeAnchored(hud, "TimerText",
-            new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
-            new Vector2(0, -38), new Vector2(200, 52),
-            "0:00", 42, Color.black, FontStyles.Bold);
-        var score = MakeAnchored(hud, "ScoreText",
-            new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
-            new Vector2(0, -92), new Vector2(260, 40),
-            "Harta: 0/5", 28, Color.black, FontStyles.Normal);
+        var btnPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(BtnPrefabPath);
 
-        var exitBtnGO = NewUIAnchored(hud, "ExitButton",
-            new Vector2(1, 1), new Vector2(1, 1),
-            new Vector2(-75, -38), new Vector2(140, 52));
-        var exitBtnImg = exitBtnGO.AddComponent<Image>();
-        exitBtnImg.color = BTN_RED_BRIGHT;
-        var exitBtn = exitBtnGO.AddComponent<Button>();
-        exitBtn.targetGraphic = exitBtnImg;
-        var exitLblGO = NewUIAnchored(exitBtnGO, "Label",
-            new Vector2(0, 0), new Vector2(1, 1), Vector2.zero, Vector2.zero);
-        var exitLbl = exitLblGO.AddComponent<TextMeshProUGUI>();
-        exitLbl.text = "EXIT"; exitLbl.fontSize = 22; exitLbl.color = Color.white;
-        exitLbl.fontStyle = FontStyles.Bold; exitLbl.alignment = TextAlignmentOptions.Center;
-        WireClick(exitBtn, flow, "ExitToMenu");
+        // ── HUD Panel ────────────────────────────────────────────────
+        var hud = new GameObject("HUDPanel");
+        if (panelParent != null) hud.transform.SetParent(panelParent, false);
+        hud.transform.localPosition = Vector3.zero;
 
-        var roomInfo = MakeAnchored(hud, "RoomInfoText",
-            new Vector2(1, 1), new Vector2(1, 1),
-            new Vector2(-200, -95), new Vector2(360, 32),
-            "", 14, new Color(0.6f, 0.8f, 1f), FontStyles.Normal,
-            TextAlignmentOptions.MidlineRight);
+        MRTKPanelBuilder.CreateBackplate("HUDBg", hud.transform,
+            new Vector3(0, 0, 0.005f), new Vector2(0.38f, 0.22f), BG_HUD);
 
-        // Shop tracker bottom-left
-        var tracker = NewUIAnchored(hud, "ShopTracker",
-            new Vector2(0, 0), new Vector2(0, 0),
-            new Vector2(165, 100), new Vector2(320, 170));
-        var trackerBg = tracker.AddComponent<Image>();
-        trackerBg.color = new Color(0.06f, 0.08f, 0.12f, 0.72f);
-        var trackerVLG = tracker.AddComponent<VerticalLayoutGroup>();
-        trackerVLG.childAlignment = TextAnchor.UpperLeft;
-        trackerVLG.spacing = 4;
-        trackerVLG.padding = new RectOffset(8, 8, 8, 8);
-        trackerVLG.childForceExpandHeight = false;
-        trackerVLG.childForceExpandWidth = true;
-        trackerVLG.childControlHeight = true;
-        trackerVLG.childControlWidth = true;
+        var timer = AddTMP3D(hud.transform, "TimerText", new Vector3(0,  0.065f, 0), 9f, Color.white, "0:00",       TextAlignmentOptions.Center, FontStyles.Bold);
+        var score = AddTMP3D(hud.transform, "ScoreText", new Vector3(0,  0.020f, 0), 7f, Color.white, "Harta: 0/5", TextAlignmentOptions.Center);
+        var roomT = AddTMP3D(hud.transform, "RoomText",  new Vector3(0, -0.015f, 0), 5f, new Color(0.6f, 0.8f, 1f), "");
 
-        var statusSlots = new GameObject[5];
+        // ShopTracker
+        var tracker = new GameObject("ShopTracker");
+        tracker.transform.SetParent(hud.transform, false);
+        tracker.transform.localPosition = new Vector3(0, -0.065f, 0);
+
+        var statusRends = new Renderer[5];
         for (int i = 0; i < 5; i++)
         {
-            var slot = new GameObject("ShopSlot_" + Shops[i].name.Replace(" ", ""), typeof(RectTransform));
-            slot.transform.SetParent(tracker.transform, false);
-            var slotRT = (RectTransform)slot.transform;
-            slotRT.sizeDelta = new Vector2(304, 28);
-            var slotImg = slot.AddComponent<Image>();
-            slotImg.color = new Color(0.4f, 0.4f, 0.4f);
-            statusSlots[i] = slot;
+            float x = -0.09f + i * 0.045f;
+            var dot = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            dot.name = "ShopDot_" + Shops[i].name.Replace(" ", "");
+            dot.transform.SetParent(tracker.transform, false);
+            dot.transform.localPosition = new Vector3(x, 0.008f, 0);
+            dot.transform.localScale = new Vector3(0.018f, 0.018f, 1f);
+            Object.DestroyImmediate(dot.GetComponent<MeshCollider>());
+            var mat = new Material(SafeShader());
+            SetMatColor(mat, new Color(0.4f, 0.4f, 0.4f, 1f));
+            dot.GetComponent<Renderer>().sharedMaterial = mat;
+            statusRends[i] = dot.GetComponent<Renderer>();
 
-            var slotLbl = new GameObject("Label", typeof(RectTransform));
-            slotLbl.transform.SetParent(slot.transform, false);
-            var lblRT = (RectTransform)slotLbl.transform;
-            lblRT.anchorMin = new Vector2(0, 0); lblRT.anchorMax = new Vector2(1, 1);
-            lblRT.offsetMin = new Vector2(10, 0); lblRT.offsetMax = new Vector2(-10, 0);
-            var tmp = slotLbl.AddComponent<TextMeshProUGUI>();
-            tmp.text = Shops[i].name; tmp.fontSize = 16;
-            tmp.color = Color.white; tmp.fontStyle = FontStyles.Bold;
-            tmp.alignment = TextAlignmentOptions.MidlineLeft;
+            var lbl = AddTMP3D(tracker.transform, "Label_" + Shops[i].name, new Vector3(x, -0.012f, 0), 4f, Color.white, Shops[i].name);
+            lbl.transform.localScale = new Vector3(0.0010f, 0.0010f, 0.0010f);
         }
 
-        // QuizCanvas
-        var quizCanvas = NewCanvas("QuizCanvas", 10);
-        var quizPanel = NewUIStretch(quizCanvas, "QuizPanel");
-        quizPanel.AddComponent<Image>().color = new Color(0, 0, 0, 0);
+        var exitBtn = InstantiateBtn(btnPrefab, hud.transform, "ExitBtn", new Vector3(0.15f, 0.065f, 0), "EXIT");
+        WireInteractable(exitBtn, flow, "ExitToMenu");
 
-        var quizBg = NewUIAnchored(quizPanel, "QuizBg",
-            new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-            new Vector2(0, 0), new Vector2(800, 340));
-        quizBg.AddComponent<Image>().color = new Color(0.06f, 0.08f, 0.18f, 0.96f);
+        AddRadialView(hud, 0.5f, 1.0f, 25f);
 
-        var quizProg = MakeAnchored(quizBg, "QuizProgressText",
-            new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
-            new Vector2(0, -25), new Vector2(760, 36),
-            "Pertanyaan 1/3 | Benar: 0", 17, new Color(0.6f, 0.85f, 1f), FontStyles.Normal);
+        // ── Quiz Panel ───────────────────────────────────────────────
+        var quiz = new GameObject("QuizPanel");
+        if (panelParent != null) quiz.transform.SetParent(panelParent, false);
+        MRTKPanelBuilder.CreateBackplate("QuizBg", quiz.transform,
+            new Vector3(0, 0, 0.01f), new Vector2(0.55f, 0.35f), BG_QUIZ);
 
-        var qText = MakeAnchored(quizBg, "QuestionText",
-            new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-            new Vector2(0, 40), new Vector2(760, 100),
-            "Pertanyaan?", 25, Color.white, FontStyles.Normal);
-        qText.enableWordWrapping = true;
+        var quizProg = AddTMP3D(quiz.transform, "ProgressText", new Vector3(0,  0.130f, 0), 6f,   new Color(0.6f, 0.85f, 1f), "Pertanyaan 1/3   Benar: 0");
+        var qText    = AddTMP3D(quiz.transform, "QuestionText", new Vector3(0,  0.055f, 0), 6.5f, Color.white,                "Pertanyaan?");
+        qText.transform.localScale = new Vector3(0.0016f, 0.0016f, 0.0016f);
+        qText.rectTransform.sizeDelta = new Vector2(280, 100);
 
-        var btns = new Button[3];
+        var ansObjs   = new GameObject[3];
+        var ansLabels = new TextMeshPro[3];
         var letters = new[] { "A", "B", "C" };
-        var xs = new[] { -260f, 0f, 260f };
+        var xs      = new[] { -0.165f, 0f, 0.165f };
         for (int i = 0; i < 3; i++)
         {
-            var bGO = NewUIAnchored(quizBg, "AnswerButton_" + letters[i],
-                new Vector2(0.5f, 0), new Vector2(0.5f, 0),
-                new Vector2(xs[i], 50), new Vector2(240, 62));
-            var bImg = bGO.AddComponent<Image>();
-            bImg.color = BTN_BLUE;
-            var btn = bGO.AddComponent<Button>();
-            btn.targetGraphic = bImg;
-            btns[i] = btn;
-            var lblGO = NewUIAnchored(bGO, "Label",
-                new Vector2(0, 0), new Vector2(1, 1), Vector2.zero, Vector2.zero);
-            var lbl = lblGO.AddComponent<TextMeshProUGUI>();
-            lbl.text = letters[i]; lbl.color = Color.white;
-            lbl.fontSize = 21; lbl.fontStyle = FontStyles.Bold;
-            lbl.alignment = TextAlignmentOptions.Center;
+            var btn = InstantiateBtn(btnPrefab, quiz.transform, "AnswerBtn_" + letters[i], new Vector3(xs[i], -0.075f, 0), letters[i]);
+            ansObjs[i] = btn;
+            ansLabels[i] = btn.GetComponentInChildren<TextMeshPro>();
         }
-        quizPanel.SetActive(false);
+        AddRadialView(quiz, 0.6f, 0.9f, 15f);
+        quiz.SetActive(false);
 
-        // ResultCanvas
-        var resultCanvas = NewCanvas("ResultCanvas", 20);
-        var resultPanel = NewUIStretch(resultCanvas, "ResultPanel");
-        resultPanel.AddComponent<Image>().color = new Color(0, 0, 0, 0.92f);
-        var resultBg = NewUIAnchored(resultPanel, "ResultBg",
-            new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-            new Vector2(0, 0), new Vector2(580, 320));
-        resultBg.AddComponent<Image>().color = new Color(0.04f, 0.14f, 0.04f, 1);
-        var resultText = MakeAnchored(resultBg, "ResultText",
-            new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-            new Vector2(0, 40), new Vector2(540, 180),
-            "", 29, Color.white, FontStyles.Normal);
-        var backBtnGO = NewUIAnchored(resultBg, "BackButton",
-            new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-            new Vector2(0, -105), new Vector2(260, 60));
-        var backBtnImg = backBtnGO.AddComponent<Image>();
-        backBtnImg.color = BTN_BLUE;
-        var backBtn = backBtnGO.AddComponent<Button>();
-        backBtn.targetGraphic = backBtnImg;
-        var backLblGO = NewUIAnchored(backBtnGO, "Label",
-            new Vector2(0, 0), new Vector2(1, 1), Vector2.zero, Vector2.zero);
-        var backLbl = backLblGO.AddComponent<TextMeshProUGUI>();
-        backLbl.text = "Kembali ke Menu"; backLbl.fontSize = 20; backLbl.color = Color.white;
-        backLbl.fontStyle = FontStyles.Bold; backLbl.alignment = TextAlignmentOptions.Center;
-        WireClick(backBtn, flow, "ExitToMenu");
-        resultPanel.SetActive(false);
+        // ── Result Panel ─────────────────────────────────────────────
+        var result = new GameObject("ResultPanel");
+        if (panelParent != null) result.transform.SetParent(panelParent, false);
+        MRTKPanelBuilder.CreateBackplate("ResultBg", result.transform,
+            new Vector3(0, 0, 0.01f), new Vector2(0.55f, 0.40f), BG_GREEN);
+        var resultTMP = AddTMP3D(result.transform, "ResultText", new Vector3(0, 0.08f, 0), 6.5f, Color.white, "");
+        resultTMP.transform.localScale = new Vector3(0.0016f, 0.0016f, 0.0016f);
+        resultTMP.rectTransform.sizeDelta = new Vector2(320, 200);
+        var backBtn = InstantiateBtn(btnPrefab, result.transform, "BackBtn", new Vector3(0, -0.13f, 0), "Kembali");
+        WireInteractable(backBtn, flow, "ExitToMenu");
+        AddRadialView(result, 0.6f, 0.9f, 15f);
+        result.SetActive(false);
 
-        // NotifCanvas
-        var notifCanvas = NewCanvas("NotifCanvas", 30);
-        var notifPanel = NewUIAnchored(notifCanvas, "NotifPanel",
-            new Vector2(0.5f, 0), new Vector2(0.5f, 0),
-            new Vector2(0, 110), new Vector2(640, 80));
-        var notifBg = notifPanel.AddComponent<Image>();
-        notifBg.color = new Color(0.08f, 0.08f, 0.08f, 0.92f);
-        var notifText = MakeAnchored(notifPanel, "NotifText",
-            new Vector2(0, 0), new Vector2(1, 1), Vector2.zero, Vector2.zero,
-            "", 21, Color.white, FontStyles.Bold);
-        notifPanel.SetActive(false);
+        // ── Notif (billboard) ────────────────────────────────────────
+        var notif = new GameObject("NotifPanel");
+        notif.transform.position = (cam.transform.position + cam.transform.forward * 1.0f) + new Vector3(0, -0.30f, 0);
+        var notifBg = MRTKPanelBuilder.CreateBackplate("NotifBg", notif.transform,
+            new Vector3(0, 0, 0.01f), new Vector2(0.45f, 0.07f), new Color(0.08f, 0.08f, 0.08f, 0.0f));
+        var notifTMP = AddTMP3D(notif.transform, "NotifText", new Vector3(0, 0, 0), 6f, Color.white, "", TextAlignmentOptions.Center, FontStyles.Bold);
+        notif.AddComponent<Billboard>();
+        notif.SetActive(false);
 
-        // HintCanvas
-        var hintCanvas = NewCanvas("HintCanvas", 25);
-        var hintPanel = NewUIAnchored(hintCanvas, "HintPanel",
-            new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-            new Vector2(0, -160), new Vector2(680, 85));
-        hintPanel.AddComponent<Image>().color = new Color(0.06f, 0.12f, 0.22f, 0.94f);
-        var hintText = MakeAnchored(hintPanel, "HintText",
-            new Vector2(0, 0), new Vector2(1, 1),
-            Vector2.zero, Vector2.zero,
-            "", 20, new Color(1f, 0.9f, 0.5f), FontStyles.Bold);
-        hintText.enableWordWrapping = true;
-        hintPanel.SetActive(false);
+        // ── Hint (billboard) ─────────────────────────────────────────
+        var hint = new GameObject("HintPanel");
+        hint.transform.position = (cam.transform.position + cam.transform.forward * 1.0f) + new Vector3(0, -0.40f, 0);
+        MRTKPanelBuilder.CreateBackplate("HintBg", hint.transform,
+            new Vector3(0, 0, 0.01f), new Vector2(0.50f, 0.07f), BG_HINT);
+        var hintTMP = AddTMP3D(hint.transform, "HintText", new Vector3(0, 0, 0), 5.5f, new Color(1f, 0.9f, 0.5f), "", TextAlignmentOptions.Center, FontStyles.Bold);
+        hint.AddComponent<Billboard>();
+        hint.SetActive(false);
 
-        // Wire GameFlowManager
+        // ── Wire GameFlowManager ─────────────────────────────────────
         var fso = new SerializedObject(flow);
-        fso.FindProperty("timerText").objectReferenceValue = timer;
-        fso.FindProperty("scoreText").objectReferenceValue = score;
-        var slotsArr = fso.FindProperty("shopStatusSlots");
-        slotsArr.arraySize = 5;
+        fso.FindProperty("hudPanel").objectReferenceValue       = hud;
+        fso.FindProperty("timerText").objectReferenceValue      = timer;
+        fso.FindProperty("scoreText").objectReferenceValue      = score;
+        fso.FindProperty("roomInfoText").objectReferenceValue   = roomT;
+
+        var rendsArr = fso.FindProperty("shopStatusRenderers");
+        rendsArr.arraySize = 5;
         for (int i = 0; i < 5; i++)
-            slotsArr.GetArrayElementAtIndex(i).objectReferenceValue = statusSlots[i];
-        fso.FindProperty("quizPanel").objectReferenceValue        = quizPanel;
-        fso.FindProperty("questionText").objectReferenceValue     = qText;
+            rendsArr.GetArrayElementAtIndex(i).objectReferenceValue = statusRends[i];
+
+        fso.FindProperty("quizPanel").objectReferenceValue        = quiz;
         fso.FindProperty("quizProgressText").objectReferenceValue = quizProg;
-        var btnArr = fso.FindProperty("answerButtons");
-        btnArr.arraySize = 3;
+        fso.FindProperty("questionText").objectReferenceValue     = qText;
+
+        var ansArr = fso.FindProperty("answerButtonObjects");
+        ansArr.arraySize = 3;
         for (int i = 0; i < 3; i++)
-            btnArr.GetArrayElementAtIndex(i).objectReferenceValue = btns[i];
-        fso.FindProperty("resultPanel").objectReferenceValue = resultPanel;
-        fso.FindProperty("resultText").objectReferenceValue  = resultText;
-        fso.FindProperty("notifPanel").objectReferenceValue  = notifPanel;
-        fso.FindProperty("notifText").objectReferenceValue   = notifText;
-        fso.FindProperty("notifBg").objectReferenceValue     = notifBg;
-        fso.FindProperty("hintPanel").objectReferenceValue   = hintPanel;
-        fso.FindProperty("hintText").objectReferenceValue    = hintText;
+            ansArr.GetArrayElementAtIndex(i).objectReferenceValue = ansObjs[i];
+
+        var lblArr = fso.FindProperty("answerLabels");
+        lblArr.arraySize = 3;
+        for (int i = 0; i < 3; i++)
+            lblArr.GetArrayElementAtIndex(i).objectReferenceValue = ansLabels[i];
+
+        fso.FindProperty("resultPanel").objectReferenceValue   = result;
+        fso.FindProperty("resultText").objectReferenceValue    = resultTMP;
+        fso.FindProperty("notifPanel").objectReferenceValue    = notif;
+        fso.FindProperty("notifText").objectReferenceValue     = notifTMP;
+        fso.FindProperty("notifRenderer").objectReferenceValue = notifBg.GetComponent<Renderer>();
+        fso.FindProperty("hintPanel").objectReferenceValue     = hint;
+        fso.FindProperty("hintText").objectReferenceValue      = hintTMP;
         fso.ApplyModifiedProperties();
 
-        // Wire MultiplayerManager
         var mso = new SerializedObject(mp);
-        mso.FindProperty("roomInfoText").objectReferenceValue = roomInfo;
+        mso.FindProperty("roomInfoText").objectReferenceValue = roomT;
         mso.ApplyModifiedProperties();
 
-        // ShopCheckpoints
+        // ── ShopCheckpoints ──────────────────────────────────────────
         EnsureFolder("Assets/FindIt/Assets/Materials");
         foreach (var s in Shops)
         {
@@ -632,17 +522,13 @@ public static class FindItCompleteSetup
             var bc = go.AddComponent<BoxCollider>();
             bc.isTrigger = true;
             bc.size = new Vector3(4f, 3f, 4f);
-            bc.center = Vector3.zero;
 
             var cp = go.AddComponent<ShopCheckpoint>();
-            cp.shopName = s.name;
-            cp.shopIndex = s.idx;
-            cp.nextShopHint = s.hint;
+            cp.shopName = s.name; cp.shopIndex = s.idx; cp.nextShopHint = s.hint;
             cp.q1 = s.q1; cp.a1 = s.a1; cp.c1 = s.c1;
             cp.q2 = s.q2; cp.a2 = s.a2; cp.c2 = s.c2;
             cp.q3 = s.q3; cp.a3 = s.a3; cp.c3 = s.c3;
 
-            // Treasure child
             var t = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             t.name = "Treasure_" + s.name.Replace(" ", "");
             t.transform.SetParent(go.transform, false);
@@ -659,12 +545,13 @@ public static class FindItCompleteSetup
             var mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
             if (mat == null)
             {
-                mat = MakeMat(s.color);
+                mat = new Material(SafeShader());
+                SetMatColor(mat, s.color);
                 AssetDatabase.CreateAsset(mat, matPath);
             }
             else
             {
-                mat.shader = SafeShader(); SetColor(mat, s.color);
+                mat.shader = SafeShader(); SetMatColor(mat, s.color);
                 EditorUtility.SetDirty(mat);
             }
             t.GetComponent<Renderer>().sharedMaterial = mat;
@@ -676,7 +563,7 @@ public static class FindItCompleteSetup
             cp.treasureObject = t;
         }
 
-        // Clean PlayerAvatar prefab
+        // Strip missing scripts from any PlayerAvatar prefab
         const string prefabPath = "Assets/FindIt/Resources/PlayerAvatar.prefab";
         var prefabRoot = PrefabUtility.LoadPrefabContents(prefabPath);
         if (prefabRoot != null)
@@ -688,7 +575,7 @@ public static class FindItCompleteSetup
 
         EditorSceneManager.MarkSceneDirty(scene);
         EditorSceneManager.SaveScene(scene);
-        Debug.Log("[FindItRebuild] FindIt_Main rebuilt and saved.");
+        Debug.Log("[FindItMRTK] FindIt_Main rebuilt and saved.");
     }
 
     static void EnsureBuildSettings()
@@ -698,15 +585,106 @@ public static class FindItCompleteSetup
             new EditorBuildSettingsScene(MenuScenePath, true),
             new EditorBuildSettingsScene(MainScenePath, true),
         };
-        Debug.Log("[FindItRebuild] Build Settings: 0=Menu, 1=Main");
     }
 
-    // ── Helpers: strip missing scripts ──────────────────────────────────
+    // ── Helpers ─────────────────────────────────────────────────────────
+    static GameObject InstantiateBtn(GameObject prefab, Transform parent, string name, Vector3 localPos, string label)
+    {
+        GameObject btn;
+        if (prefab == null)
+        {
+            Debug.LogWarning("[FindItMRTK] Button prefab missing — falling back to Quad");
+            btn = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            btn.AddComponent<Interactable>();
+        }
+        else
+        {
+            btn = (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent);
+        }
+        btn.name = name;
+        btn.transform.SetParent(parent, false);
+        btn.transform.localPosition = localPos;
+        btn.transform.localRotation = Quaternion.identity;
+        btn.transform.localScale = new Vector3(0.0006f, 0.0006f, 0.0006f);
+        MRTKButtonHelper.SetLabel(btn, label);
+        return btn;
+    }
+
+    static void WireInteractable(GameObject btn, Object target, string method)
+    {
+        if (btn == null || target == null) return;
+        var interactable = btn.GetComponent<Interactable>();
+        if (interactable == null) return;
+
+        var so = new SerializedObject(interactable);
+        var onClick = so.FindProperty("OnClick");
+        if (onClick == null) return;
+        var calls = onClick.FindPropertyRelative("m_PersistentCalls.m_Calls");
+        if (calls == null) return;
+        calls.ClearArray();
+        calls.InsertArrayElementAtIndex(0);
+        var el = calls.GetArrayElementAtIndex(0);
+        el.FindPropertyRelative("m_Target").objectReferenceValue = target;
+        el.FindPropertyRelative("m_MethodName").stringValue = method;
+        el.FindPropertyRelative("m_Mode").enumValueIndex = 1;
+        el.FindPropertyRelative("m_CallState").enumValueIndex = 2;
+        so.ApplyModifiedPropertiesWithoutUndo();
+    }
+
+    static TextMeshPro AddTMP3D(Transform parent, string name, Vector3 localPos,
+        float fontSize, Color color, string text,
+        TextAlignmentOptions align = TextAlignmentOptions.Center,
+        FontStyles style = FontStyles.Normal)
+    {
+        var go = new GameObject(name);
+        go.transform.SetParent(parent, false);
+        go.transform.localPosition = localPos;
+        var tmp = go.AddComponent<TextMeshPro>();
+        tmp.text = text;
+        tmp.fontSize = fontSize;
+        tmp.color = color;
+        tmp.alignment = align;
+        tmp.fontStyle = style;
+        tmp.enableWordWrapping = true;
+        tmp.rectTransform.sizeDelta = new Vector2(220, 40);
+        tmp.transform.localScale = new Vector3(0.002f, 0.002f, 0.002f);
+        return tmp;
+    }
+
+    static void AddRadialView(GameObject panel, float minDist, float maxDist, float maxViewDeg)
+    {
+        var handler = panel.AddComponent<SolverHandler>();
+        handler.TrackedTargetType = TrackedObjectType.Head;
+        var rv = panel.AddComponent<RadialView>();
+        rv.MinDistance = minDist;
+        rv.MaxDistance = maxDist;
+        rv.MinViewDegrees = 0f;
+        rv.MaxViewDegrees = maxViewDeg;
+        rv.MoveLerpTime = 0.12f;
+        rv.RotateLerpTime = 0.12f;
+    }
+
+    static Shader _shader;
+    static Shader SafeShader()
+    {
+        if (_shader != null) return _shader;
+        _shader = Shader.Find("Mixed Reality Toolkit/Standard")
+               ?? Shader.Find("Universal Render Pipeline/Lit")
+               ?? Shader.Find("Standard")
+               ?? Shader.Find("Unlit/Color");
+        return _shader;
+    }
+    static void SetMatColor(Material m, Color c)
+    {
+        m.color = c;
+        if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", c);
+    }
+
     static void StripMissingScriptsAllRoots(UnityEngine.SceneManagement.Scene scene)
     {
         int n = 0;
         foreach (var root in scene.GetRootGameObjects()) n += StripRecursive(root);
-        if (n > 0) Debug.Log("[FindItRebuild] Stripped " + n + " missing scripts.");
+        if (n > 0) Debug.Log("[FindItMRTK] Stripped " + n + " missing scripts.");
     }
 
     static int StripRecursive(GameObject go)
@@ -716,131 +694,15 @@ public static class FindItCompleteSetup
         return n;
     }
 
-    // ── Helpers: shaders ────────────────────────────────────────────────
-    static Shader _shader;
-    static Shader SafeShader()
+    static GameObject FindInScene(UnityEngine.SceneManagement.Scene scene, string name)
     {
-        if (_shader != null) return _shader;
-        _shader = Shader.Find("Universal Render Pipeline/Lit")
-               ?? Shader.Find("Standard")
-               ?? Shader.Find("Unlit/Color");
-        return _shader;
-    }
-    static void SetColor(Material m, Color c)
-    {
-        m.color = c;
-        if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", c);
-    }
-    static Material MakeMat(Color c) { var m = new Material(SafeShader()); SetColor(m, c); return m; }
-
-    // ── Helpers: UI ─────────────────────────────────────────────────────
-    static GameObject NewCanvas(string name, int sortOrder)
-    {
-        var go = new GameObject(name, typeof(RectTransform));
-        var canvas = go.AddComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        canvas.sortingOrder = sortOrder;
-        var scaler = go.AddComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920, 1080);
-        scaler.matchWidthOrHeight = 0.5f;
-        go.AddComponent<GraphicRaycaster>();
-        Undo.RegisterCreatedObjectUndo(go, "Create " + name);
-        return go;
-    }
-
-    static GameObject NewUIStretch(GameObject parent, string name)
-    {
-        var go = new GameObject(name, typeof(RectTransform));
-        go.transform.SetParent(parent.transform, false);
-        var rt = (RectTransform)go.transform;
-        rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
-        rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
-        return go;
-    }
-
-    static GameObject NewUI(GameObject parent, string name, float x, float y, float w, float h)
-    {
-        var go = new GameObject(name, typeof(RectTransform));
-        go.transform.SetParent(parent.transform, false);
-        var rt = (RectTransform)go.transform;
-        rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
-        rt.pivot = new Vector2(0.5f, 0.5f);
-        rt.anchoredPosition = new Vector2(x, y);
-        rt.sizeDelta = new Vector2(w, h);
-        return go;
-    }
-
-    static GameObject NewUIAnchored(GameObject parent, string name,
-        Vector2 aMin, Vector2 aMax, Vector2 pos, Vector2 size)
-    {
-        var go = new GameObject(name, typeof(RectTransform));
-        go.transform.SetParent(parent.transform, false);
-        var rt = (RectTransform)go.transform;
-        rt.anchorMin = aMin; rt.anchorMax = aMax;
-        rt.pivot = new Vector2(0.5f, 0.5f);
-        rt.anchoredPosition = pos;
-        rt.sizeDelta = size;
-        return go;
-    }
-
-    static TextMeshProUGUI MakeLabel(GameObject parent, string name, float x, float y, float w, float h,
-        string text, float fontSize, Color color, FontStyles style,
-        TextAlignmentOptions align = TextAlignmentOptions.Center)
-    {
-        var go = NewUI(parent, name, x, y, w, h);
-        var t = go.AddComponent<TextMeshProUGUI>();
-        t.text = text; t.fontSize = fontSize; t.color = color; t.fontStyle = style;
-        t.alignment = align; t.enableWordWrapping = true;
-        return t;
-    }
-
-    static TextMeshProUGUI MakeAnchored(GameObject parent, string name,
-        Vector2 aMin, Vector2 aMax, Vector2 pos, Vector2 size,
-        string text, float fontSize, Color color, FontStyles style,
-        TextAlignmentOptions align = TextAlignmentOptions.Center)
-    {
-        var go = NewUIAnchored(parent, name, aMin, aMax, pos, size);
-        var t = go.AddComponent<TextMeshProUGUI>();
-        t.text = text; t.fontSize = fontSize; t.color = color; t.fontStyle = style;
-        t.alignment = align; t.enableWordWrapping = true;
-        return t;
-    }
-
-    static Button MakeButton(GameObject parent, string name, float x, float y, float w, float h,
-        string label, Color bg)
-    {
-        var go = NewUI(parent, name, x, y, w, h);
-        var img = go.AddComponent<Image>(); img.color = bg;
-        var btn = go.AddComponent<Button>(); btn.targetGraphic = img;
-        var lblGO = NewUIAnchored(go, "Label",
-            new Vector2(0, 0), new Vector2(1, 1), Vector2.zero, Vector2.zero);
-        var lbl = lblGO.AddComponent<TextMeshProUGUI>();
-        lbl.text = label; lbl.color = Color.white;
-        lbl.fontSize = 20; lbl.fontStyle = FontStyles.Bold;
-        lbl.alignment = TextAlignmentOptions.Center;
-        return btn;
-    }
-
-    static void WireClick(Button btn, Object target, string method)
-    {
-        if (btn == null || target == null) return;
-        var so = new SerializedObject(btn);
-        var calls = so.FindProperty("m_OnClick.m_PersistentCalls.m_Calls");
-        if (calls == null) return;
-        calls.InsertArrayElementAtIndex(calls.arraySize);
-        var el = calls.GetArrayElementAtIndex(calls.arraySize - 1);
-        el.FindPropertyRelative("m_Target").objectReferenceValue = target;
-        el.FindPropertyRelative("m_MethodName").stringValue = method;
-        el.FindPropertyRelative("m_Mode").enumValueIndex = 1;
-        el.FindPropertyRelative("m_CallState").enumValueIndex = 2;
-        so.ApplyModifiedPropertiesWithoutUndo();
-    }
-
-    static TextMeshProUGUI FindChildTMP(GameObject parent, string name)
-    {
-        var t = FindChildTransform(parent.transform, name);
-        return t?.GetComponent<TextMeshProUGUI>();
+        foreach (var r in scene.GetRootGameObjects())
+        {
+            if (r.name == name) return r;
+            var t = FindChildTransform(r.transform, name);
+            if (t != null) return t.gameObject;
+        }
+        return null;
     }
 
     static Transform FindChildTransform(Transform t, string name)
@@ -850,17 +712,6 @@ public static class FindItCompleteSetup
         {
             var f = FindChildTransform(c, name);
             if (f != null) return f;
-        }
-        return null;
-    }
-
-    static GameObject FindInScene(UnityEngine.SceneManagement.Scene scene, string name)
-    {
-        foreach (var r in scene.GetRootGameObjects())
-        {
-            if (r.name == name) return r;
-            var t = FindChildTransform(r.transform, name);
-            if (t != null) return t.gameObject;
         }
         return null;
     }

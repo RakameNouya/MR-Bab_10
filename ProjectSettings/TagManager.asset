@@ -6,6 +6,7 @@ TagManager:
   tags:
   - Treasure
   - MainCamera
+  - Player
   layers:
   - Default
   - TransparentFX
