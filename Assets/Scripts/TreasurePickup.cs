@@ -36,6 +36,10 @@ public class TreasurePickup : MonoBehaviour
         if (claimed) return;
         claimed = true;
         Debug.Log("[Treasure] Claimed: " + gameObject.name);
+        if (AudioManager.Instance != null)
+            AudioManager.Instance.PlaySpatialSFX(
+                AudioManager.Instance.sfxTreasureClaim,
+                transform.position, 1.0f);
         gameObject.SetActive(false);
         parentCheckpoint?.OnTreasureClaimed();
     }

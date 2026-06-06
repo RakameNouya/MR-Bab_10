@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections;
+using UnityEngine.UI;
 
 public class CanvasWorldCameraSetup : MonoBehaviour
 {
@@ -8,31 +9,25 @@ public class CanvasWorldCameraSetup : MonoBehaviour
         yield return null;
         yield return null;
 
-        var cam = Camera.main;
+        Camera cam = Camera.main;
         if (cam == null)
         {
-            var camGO = GameObject.FindWithTag("MainCamera");
-            if (camGO) cam = camGO.GetComponent<Camera>();
+            var go = GameObject.FindWithTag("MainCamera");
+            if (go) cam = go.GetComponent<Camera>();
         }
-
         if (cam == null)
         {
-            Debug.LogError("[CanvasSetup] No MainCamera found!");
+            Debug.LogError("[CanvasSetup] MainCamera not found!");
             yield break;
         }
 
-        var canvases = FindObjectsOfType<Canvas>();
-        foreach (var c in canvases)
+        foreach (var c in FindObjectsOfType<Canvas>())
         {
-            if (c.renderMode == RenderMode.WorldSpace)
+            if (c.renderMode == RenderMode.WorldSpace && c.worldCamera == null)
             {
                 c.worldCamera = cam;
-                Debug.Log("[CanvasSetup] worldCamera set on: " + c.name);
+                Debug.Log("[CanvasSetup] Set worldCamera: " + c.name);
             }
         }
-
-        var raycasters = FindObjectsOfType<UnityEngine.UI.GraphicRaycaster>();
-        foreach (var r in raycasters)
-            Debug.Log("[CanvasSetup] GraphicRaycaster on: " + r.gameObject.name);
     }
 }

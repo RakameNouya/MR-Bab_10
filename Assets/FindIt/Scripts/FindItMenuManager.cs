@@ -28,40 +28,47 @@ public class FindItMenuManager : MonoBehaviour
         if (!string.IsNullOrEmpty(saved))
         {
             if (usernameInputField) usernameInputField.text = saved;
-            if (helloText) helloText.text = "Halo, " + saved + "! 👋";
+            if (helloText) helloText.text = "Halo, " + saved + "!";
         }
         HideAll();
     }
 
     public void SaveUsername()
     {
+        AudioManager.Instance?.PlayButtonClick();
         string name = usernameInputField != null ? usernameInputField.text.Trim() : "";
         if (string.IsNullOrEmpty(name)) { Notif("Masukkan nama dulu!"); return; }
         PlayerPrefs.SetString("PlayerName", name);
         PlayerPrefs.Save();
-        if (helloText) helloText.text = "Halo, " + name + "! 👋";
-        Notif("✓ Nama disimpan: " + name);
+        if (helloText) helloText.text = "Halo, " + name + "!";
+        Notif("Nama disimpan: " + name);
     }
 
     public void StartGame()
     {
+        AudioManager.Instance?.PlayButtonClick();
         if (string.IsNullOrEmpty(PlayerPrefs.GetString("PlayerName", "")))
         { Notif("Masukkan nama kamu dulu!"); return; }
         SceneManager.LoadScene(1);
     }
 
     public void ShowMain()      { SetPanels(main: true); }
-    public void ShowTutorial()  { SetPanels(tutorial: true); }
-    public void ShowCredits()   { SetPanels(credits: true); }
+    public void ShowTutorial()  { AudioManager.Instance?.PlayButtonClick(); SetPanels(tutorial: true); }
+    public void ShowCredits()   { AudioManager.Instance?.PlayButtonClick(); SetPanels(credits: true); }
     public void HideAll()       { SetPanels(); }
 
     public void ShowLeaderboard()
     {
+        AudioManager.Instance?.PlayButtonClick();
         SetPanels(lb: true);
         PopulateLeaderboard();
     }
 
-    public void ExitGame() { Application.Quit(); }
+    public void ExitGame()
+    {
+        AudioManager.Instance?.PlayButtonClick();
+        Application.Quit();
+    }
 
     void SetPanels(bool main = false, bool tutorial = false, bool credits = false, bool lb = false)
     {
