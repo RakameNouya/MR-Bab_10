@@ -196,7 +196,7 @@ public class GameFlowManager : MonoBehaviourPunCallbacks
         if (hintPanel)
         {
             hintPanel.SetActive(true);
-            if (hintText) hintText.text = "[Petunjuk] " + hint;
+            if (hintText) hintText.text = "[Hint] " + hint;
             StartCoroutine(HideAfter(hintPanel, 6f));
         }
     }

@@ -51,7 +51,10 @@
       "Bash(tee /tmp/logs.json)",
       "Bash(git commit -m 'REBUILD: clean scripts, proper mall, fixed checkpoint, timer, controls' -m ' *)",
       "Bash(git commit -m 'Fix checkpoint trigger, timer, scene flow Menu↔Main' -m ' *)",
-      "Bash(git commit -m 'Complete game rebuild: GameFlowManager, ShopCheckpoint, screen-space UI, camera collider' -m ' *)"
+      "Bash(git commit -m 'Complete game rebuild: GameFlowManager, ShopCheckpoint, screen-space UI, camera collider' -m ' *)",
+      "Bash(xargs -I{} basename {})",
+      "Bash(grep -nP '\\\\\\\\u[0-9A-Fa-f]{4}|\\\\\\\\U[0-9A-Fa-f]{8}' \"Assets/SamplesResources/Scenes/FindIt_Menu.unity\")",
+      "Bash(git commit *)"
     ]
   },
   "enabledMcpjsonServers": [

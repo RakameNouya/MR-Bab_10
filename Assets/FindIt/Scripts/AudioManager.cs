@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public class AudioManager : MonoBehaviour
 {
@@ -22,11 +23,9 @@ public class AudioManager : MonoBehaviour
         if (Instance != null) { Destroy(gameObject); return; }
         Instance = this;
         DontDestroyOnLoad(gameObject);
-
         sfxSource = gameObject.AddComponent<AudioSource>();
         sfxSource.spatialBlend = 0f;
         sfxSource.playOnAwake = false;
-
         bgmSource = gameObject.AddComponent<AudioSource>();
         bgmSource.spatialBlend = 0f;
         bgmSource.loop = true;
@@ -48,11 +47,11 @@ public class AudioManager : MonoBehaviour
 
     public void StopBGM() { if (bgmSource) bgmSource.Stop(); }
 
-    public void PlayButtonClick()       => PlaySFX(sfxButtonClick, 1.0f);
-    public void PlayCorrect()           => PlaySFX(sfxCorrect, 1.0f);
-    public void PlayWrong()             => PlaySFX(sfxWrong, 1.0f);
-    public void PlayTreasureClaim()     => PlaySFX(sfxTreasureClaim, 1.0f);
-    public void PlayMissionComplete()   => PlaySFX(sfxMissionComplete, 0.8f);
+    public void PlayButtonClick()     => PlaySFX(sfxButtonClick, 1.0f);
+    public void PlayCorrect()         => PlaySFX(sfxCorrect, 1.0f);
+    public void PlayWrong()           => PlaySFX(sfxWrong, 1.0f);
+    public void PlayTreasureClaim()   => PlaySFX(sfxTreasureClaim, 1.0f);
+    public void PlayMissionComplete() => PlaySFX(sfxMissionComplete, 0.8f);
 
     void PlaySFX(AudioClip clip, float volume)
     {
