@@ -194,7 +194,6 @@ public class GameManager : MonoBehaviour {
         }
 
         // Baris audio tetap dimatikan agar tidak crash di HoloLens
-        //AudioManager.Instance.PlaySound((isCorrect) ? "CorrectSFX" : "IncorrectSFX");
 
         if (type != UIManager.ResolutionScreenType.Finish)
         {
@@ -242,8 +241,6 @@ public class GameManager : MonoBehaviour {
         while (timeLeft > 0)
         {
             timeLeft--;
-
-            AudioManager.Instance.PlaySound("CountdownSFX");
 
             if (timeLeft < totalTime / 2 && timeLeft > totalTime / 4)
             {

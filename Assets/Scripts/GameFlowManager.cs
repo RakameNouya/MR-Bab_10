@@ -162,8 +162,6 @@ public class GameFlowManager : MonoBehaviourPunCallbacks
     {
         if (currentData == null) return;
         bool correct = idx == currentData.correctIndex;
-        if (correct) AudioManager.Instance?.PlayCorrect();
-        else         AudioManager.Instance?.PlayWrong();
         StartCoroutine(FlashAnswer(idx, correct));
         if (correct) currentData.onCorrect?.Invoke();
         else         currentData.onWrong?.Invoke();
@@ -182,7 +180,6 @@ public class GameFlowManager : MonoBehaviourPunCallbacks
     {
         collected++;
         if (scoreText) scoreText.text = "Harta: " + collected + "/" + totalShops;
-        AudioManager.Instance?.PlayTreasureClaim();
         ShowNotif("Harta " + shopName + " diklaim! (" + collected + "/" + totalShops + ")",
             Color.cyan, 2.5f);
         if (collected >= totalShops) Invoke(nameof(MissionComplete), 1.2f);
@@ -204,8 +201,6 @@ public class GameFlowManager : MonoBehaviourPunCallbacks
     void MissionComplete()
     {
         timerRunning = false;
-        AudioManager.Instance?.PlayMissionComplete();
-        AudioManager.Instance?.StopBGM();
         string name = PlayerPrefs.GetString("PlayerName", "Pemain");
         LeaderboardManager.Instance?.SaveScore(name, collected, elapsed);
         if (resultPanel) resultPanel.SetActive(true);
